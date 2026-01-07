@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chrome MCP</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <svg class="logo-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M9 3H5C3.89543 3 3 3.89543 3 5V9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <path d="M15 3H19C20.1046 3 21 3.89543 21 5V9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <path d="M9 21H5C3.89543 21 3 20.1046 3 19V15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <path d="M15 21H19C20.1046 21 21 20.1046 21 19V15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/>
+        </svg>
+        <span class="logo-text">Chrome MCP</span>
+      </div>
+      <div class="status-indicator" id="statusIndicator">
+        <span class="status-dot"></span>
+        <span class="status-text">Idle</span>
+      </div>
+    </header>
+
+    <!-- Tabs -->
+    <nav class="tabs">
+      <button class="tab" data-tab="record">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="8"/>
+        </svg>
+        Record
+      </button>
+      <button class="tab active" data-tab="mcp">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2L2 7L12 12L22 7L12 2Z"/>
+          <path d="M2 17L12 22L22 17"/>
+          <path d="M2 12L12 17L22 12"/>
+        </svg>
+        MCP
+      </button>
+      <button class="tab" data-tab="agent">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="4" y="4" width="16" height="16" rx="2"/>
+          <path d="M9 9L15 15M15 9L9 15"/>
+        </svg>
+        Agent
+      </button>
+    </nav>
+
+    <!-- Content -->
+    <main class="content">
+      <!-- Record Tab -->
+      <section class="tab-content" id="recordTab">
+        <!-- Record Controls -->
+        <div class="record-controls">
+          <button class="record-btn" id="recordBtn">
+            <span class="record-icon"></span>
+            <span class="record-text">Record</span>
+          </button>
+          <button class="pause-btn" id="pauseBtn" disabled title="Pause (Ctrl+P)">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="4" width="4" height="16"/>
+              <rect x="14" y="4" width="4" height="16"/>
+            </svg>
+          </button>
+          <span class="record-timer" id="recordTimer">00:00</span>
+        </div>
+
+        <!-- Options (Collapsible) -->
+        <div class="collapsible" id="optionsCollapsible">
+          <div class="collapsible-header">
+            <h3>Recording Options</h3>
+            <svg class="collapsible-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+          <div class="collapsible-content">
+            <label class="checkbox-option">
+              <input type="checkbox" id="trackClicks" checked>
+              <span class="checkmark"></span>
+              Track Clicks
+            </label>
+            <label class="checkbox-option">
+              <input type="checkbox" id="trackKeyboard" checked>
+              <span class="checkmark"></span>
+              Track Keyboard
+            </label>
+            <label class="checkbox-option">
+              <input type="checkbox" id="trackScroll" checked>
+              <span class="checkmark"></span>
+              Track Scroll
+            </label>
+            <label class="checkbox-option">
+              <input type="checkbox" id="trackDOMChanges" checked>
+              <span class="checkmark"></span>
+              Track DOM Changes
+            </label>
+            <label class="checkbox-option">
+              <input type="checkbox" id="skipDynamic" checked>
+              <span class="checkmark"></span>
+              Skip Dynamic Changes
+            </label>
+            <div class="threshold-row">
+              <span class="help-text" style="margin:0">Threshold</span>
+              <input type="range" id="dynamicThreshold" min="50" max="2000" value="500">
+              <span class="threshold-value" id="thresholdValue">500ms</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Log Section -->
+        <div class="log-section">
+          <div class="log-header">
+            <div class="log-stats">
+              <h3>Log</h3>
+              <span class="log-count" id="logCount">0 entries</span>
+            </div>
+            <div class="log-actions">
+              <button class="action-btn" id="copyLogBtn" title="Copy (Ctrl+C)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2"/>
+                  <path d="M5 15H4C2.89543 15 2 14.1046 2 13V4C2 2.89543 2.89543 2 4 2H13C14.1046 2 15 2.89543 15 4V5"/>
+                </svg>
+              </button>
+              <button class="action-btn" id="exportLogBtn" title="Export JSON">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V15"/>
+                  <path d="M12 3V15M12 15L8 11M12 15L16 11"/>
+                </svg>
+              </button>
+              <button class="action-btn" id="clearLogBtn" title="Clear">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 6H5H21"/>
+                  <path d="M8 6V4C8 3.44772 8.44772 3 9 3H15C15.5523 3 16 3.44772 16 4V6M19 6V20C19 20.5523 18.5523 21 18 21H6C5.44772 21 5 20.5523 5 20V6H19Z"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Search -->
+          <div class="search-box">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="M21 21L16.65 16.65"/>
+            </svg>
+            <input type="text" id="logSearch" placeholder="Search logs...">
+          </div>
+
+          <!-- Filters -->
+          <div class="log-filter">
+            <button class="filter-btn active" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="click">Click</button>
+            <button class="filter-btn" data-filter="keyboard">Keyboard</button>
+            <button class="filter-btn" data-filter="scroll">Scroll</button>
+            <button class="filter-btn" data-filter="dom">DOM</button>
+            <button class="filter-btn" data-filter="navigation">Nav</button>
+          </div>
+
+          <!-- Log Container -->
+          <div class="log-container" id="logContainer">
+            <div class="log-empty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 8V12L14 14"/>
+              </svg>
+              <p>Start recording to capture interactions</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- MCP Tab -->
+      <section class="tab-content active" id="mcpTab">
+        <!-- Status Card -->
+        <div class="mcp-status-card">
+          <div class="mcp-indicator" id="mcpIndicator">
+            <span class="pulse"></span>
+          </div>
+          <div class="mcp-info">
+            <h3>MCP Server</h3>
+            <p id="mcpStatusText">Not Connected</p>
+          </div>
+        </div>
+
+        <!-- Config -->
+        <div class="collapsible" id="mcpConfigCollapsible">
+          <div class="collapsible-header">
+            <h3>Server Configuration</h3>
+            <svg class="collapsible-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+          <div class="collapsible-content">
+            <div class="input-row">
+              <div class="input-group">
+                <label for="mcpHost">Host</label>
+                <input type="text" id="mcpHost" value="localhost">
+              </div>
+              <div class="input-group" style="max-width: 80px;">
+                <label for="mcpPort">Port</label>
+                <input type="number" id="mcpPort" value="3052">
+              </div>
+            </div>
+            <button class="primary-btn" id="startMcpBtn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="5,3 19,12 5,21"/>
+              </svg>
+              Connect
+            </button>
+          </div>
+        </div>
+
+        <!-- Tools -->
+        <div class="collapsible" id="toolsCollapsible">
+          <div class="collapsible-header">
+            <h3>Available Tools</h3>
+            <svg class="collapsible-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+          <div class="collapsible-content">
+            <div class="tools-grid">
+              <div class="tool-item"><span class="tool-icon">🖱️</span><span class="tool-name">click</span></div>
+              <div class="tool-item"><span class="tool-icon">⌨️</span><span class="tool-name">type</span></div>
+              <div class="tool-item"><span class="tool-icon">🧭</span><span class="tool-name">navigate</span></div>
+              <div class="tool-item"><span class="tool-icon">📸</span><span class="tool-name">snapshot</span></div>
+              <div class="tool-item"><span class="tool-icon">📜</span><span class="tool-name">scroll</span></div>
+              <div class="tool-item"><span class="tool-icon">🔍</span><span class="tool-name">evaluate</span></div>
+              <div class="tool-item"><span class="tool-icon">⏳</span><span class="tool-name">wait</span></div>
+              <div class="tool-item"><span class="tool-icon">👆</span><span class="tool-name">hover</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Setup -->
+        <div class="mcp-instructions">
+          <h3>Quick Setup</h3>
+          <div class="instruction-steps">
+            <div class="step">
+              <span class="step-num">1</span>
+              <p>Run <code>npm start</code> in mcp-server folder</p>
+            </div>
+            <div class="step">
+              <span class="step-num">2</span>
+              <p>Add config below to your AI tool's MCP settings</p>
+            </div>
+            <div class="step">
+              <span class="step-num">3</span>
+              <p>Click Connect above</p>
+            </div>
+          </div>
+          <div class="config-code">
+            <pre id="mcpConfigCode">{
+  "chrome-mcp": {
+    "command": "node",
+    "args": ["/path/to/ChromeMCP/mcp-server/index.js"]
+  }
+}</pre>
+            <button class="copy-config-btn" id="copyConfigBtn">Copy</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Agent Tab -->
+      <section class="tab-content" id="agentTab">
+        <!-- Control Panel -->
+        <div class="agent-control-panel">
+          <div>
+            <h3>Agent Control</h3>
+            <p class="help-text">Allow AI to control browser</p>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="agentEnabled">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <!-- Permissions -->
+        <div class="collapsible" id="permissionsCollapsible">
+          <div class="collapsible-header">
+            <h3>Permissions</h3>
+            <svg class="collapsible-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+          <div class="collapsible-content">
+            <label class="checkbox-option">
+              <input type="checkbox" id="allowMouse" checked>
+              <span class="checkmark"></span>
+              Mouse Control
+            </label>
+            <label class="checkbox-option">
+              <input type="checkbox" id="allowKeyboard" checked>
+              <span class="checkmark"></span>
+              Keyboard Input
+            </label>
+            <label class="checkbox-option">
+              <input type="checkbox" id="allowNavigation" checked>
+              <span class="checkmark"></span>
+              Navigation
+            </label>
+            <label class="checkbox-option">
+              <input type="checkbox" id="allowScripts" checked>
+              <span class="checkmark"></span>
+              Script Execution
+            </label>
+            <label class="checkbox-option">
+              <input type="checkbox" id="allowScreenshot">
+              <span class="checkmark"></span>
+              Screenshots
+            </label>
+          </div>
+        </div>
+
+        <!-- Visual Feedback -->
+        <div class="collapsible" id="visualCollapsible">
+          <div class="collapsible-header">
+            <h3>Visual Feedback</h3>
+            <svg class="collapsible-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </div>
+          <div class="collapsible-content">
+            <label class="checkbox-option">
+              <input type="checkbox" id="showCursor" checked>
+              <span class="checkmark"></span>
+              Show AI Cursor
+            </label>
+            <label class="checkbox-option">
+              <input type="checkbox" id="highlightTarget" checked>
+              <span class="checkmark"></span>
+              Highlight Targets
+            </label>
+            <label class="checkbox-option">
+              <input type="checkbox" id="showTooltips" checked>
+              <span class="checkmark"></span>
+              Show Action Tooltips
+            </label>
+          </div>
+        </div>
+
+        <!-- Activity Log -->
+        <div class="agent-activity">
+          <div class="section-header">
+            <h3>Recent Activity</h3>
+          </div>
+          <div class="activity-log" id="agentActivityLog">
+            <div class="activity-empty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 6V12L16 14"/>
+              </svg>
+              <p>No agent activity yet</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <span class="version">v1.0.0</span>
+      <div class="footer-links">
+        <a href="#" id="shortcutsLink">Shortcuts</a>
+        <a href="#" id="helpLink">Help</a>
+        <a href="https://rtbruhan.github.io" target="_blank" id="authorLink" class="author-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+          Author
+        </a>
+      </div>
+    </footer>
+  </div>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>

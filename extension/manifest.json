@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Chrome MCP",
+  "version": "1.0.0",
+  "description": "MCP server integration for AI browser control, interaction recording, and debugging",
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "scripting",
+    "storage",
+    "webNavigation",
+    "alarms"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Chrome MCP"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/content.js"],
+      "css": ["content/content.css"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["content/*"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "externally_connectable": {
+    "ids": ["*"],
+    "matches": ["http://localhost:*/*", "ws://localhost:*/*"]
+  }
+}

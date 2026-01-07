@@ -1,0 +1,26 @@
+{
+  "name": "chrome-debug-hand-mcp",
+  "version": "1.0.0",
+  "description": "MCP Server for Chrome Debug Hand - Connect AI tools to Chrome browser",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "keywords": [
+    "mcp",
+    "chrome",
+    "debug",
+    "ai",
+    "cursor",
+    "browser-automation"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.24.0",
+    "ws": "^8.16.0"
+  }
+}
+

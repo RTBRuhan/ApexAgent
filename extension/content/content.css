@@ -1,0 +1,172 @@
+/* Chrome Debug Hand - Content Script Styles */
+/* Minimal Professional Theme */
+
+#debug-hand-cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2147483647;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-2px, -2px);
+  transition: opacity 0.2s ease;
+}
+
+#debug-hand-cursor.visible {
+  opacity: 1;
+}
+
+#debug-hand-cursor svg {
+  display: block;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+#debug-hand-highlight {
+  position: fixed;
+  z-index: 2147483646;
+  pointer-events: none;
+  border: 2px solid #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+
+#debug-hand-highlight.visible {
+  opacity: 1;
+  animation: highlightFade 1s ease-out forwards;
+}
+
+@keyframes highlightFade {
+  0% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+#debug-hand-tooltip {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(60px);
+  z-index: 2147483647;
+  padding: 8px 14px;
+  background: #171717;
+  border: 1px solid #262626;
+  border-radius: 6px;
+  color: #fafafa;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+#debug-hand-tooltip.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+#debug-hand-tooltip::before {
+  content: '';
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  background: #3b82f6;
+  border-radius: 50%;
+}
+
+/* Recording indicator */
+.debug-hand-recording-indicator {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 2147483645;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #171717;
+  border: 1px solid #ef4444;
+  border-radius: 16px;
+  color: #ef4444;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.debug-hand-recording-indicator::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: #ef4444;
+  border-radius: 50%;
+  animation: recordingPulse 1.5s ease infinite;
+}
+
+@keyframes recordingPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Click effect */
+.debug-hand-click-effect {
+  position: fixed;
+  z-index: 2147483644;
+  pointer-events: none;
+  width: 32px;
+  height: 32px;
+  border: 2px solid #3b82f6;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: clickRipple 0.4s ease-out forwards;
+}
+
+@keyframes clickRipple {
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 0;
+  }
+}
+
+/* Selection highlight */
+.debug-hand-selected {
+  outline: 2px solid #3b82f6 !important;
+  outline-offset: 2px !important;
+}
+
+/* Paused indicator */
+.debug-hand-paused-indicator {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 2147483645;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #171717;
+  border: 1px solid #f59e0b;
+  border-radius: 16px;
+  color: #f59e0b;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.debug-hand-paused-indicator::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: #f59e0b;
+  border-radius: 1px;
+}
