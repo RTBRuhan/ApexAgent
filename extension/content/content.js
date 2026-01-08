@@ -221,7 +221,9 @@
     if (!isRecording || isPaused) return;
     
     // Skip if typing in input (handled by input event)
-    if (event.target.matches('input, textarea, [contenteditable]') && 
+    // Check if target is an Element before calling matches
+    if (event.target && event.target.matches && 
+        event.target.matches('input, textarea, [contenteditable]') && 
         !event.ctrlKey && !event.metaKey && !event.altKey &&
         event.key.length === 1) {
       return;
@@ -772,7 +774,7 @@
       'f9': 'F9', 'f10': 'F10', 'f11': 'F11', 'f12': 'F12'
     };
     
-    const normalizedKey = keyMap[key.toLowerCase()] || key;
+    const normalizedKey = keyMap[key?.toLowerCase?.()] || key || 'Enter';
     
     // Modifier states
     const ctrlKey = modifiers.includes('ctrl') || modifiers.includes('control');
@@ -1059,7 +1061,7 @@
       boxModel: boxModel,
       css: cssProperties,
       childCount: el.children.length,
-      parentTag: el.parentElement?.tagName.toLowerCase(),
+      parentTag: el.parentElement?.tagName?.toLowerCase(),
       visible: isVisible(el),
       inViewport: isInViewport(el)
     };

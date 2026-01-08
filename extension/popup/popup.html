@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chrome MCP</title>
+  <title>Apex Agent</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
@@ -18,13 +18,69 @@
           <path d="M15 21H19C20.1046 21 21 20.1046 21 19V15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/>
         </svg>
-        <span class="logo-text">Chrome MCP</span>
+        <span class="logo-text">Apex Agent</span>
       </div>
-      <div class="status-indicator" id="statusIndicator">
-        <span class="status-dot"></span>
-        <span class="status-text">Idle</span>
+      <div class="header-right">
+        <div class="status-indicator" id="statusIndicator">
+          <span class="status-dot"></span>
+          <span class="status-text">Idle</span>
+        </div>
+        <button class="header-btn ai-btn hidden" id="openAiSidebarBtn" title="Open AI Assistant">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+        </button>
+        <button class="header-btn" id="settingsBtn" title="Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
+          </svg>
+        </button>
+        <a href="https://rtbruhan.github.io" target="_blank" class="header-btn author-btn" title="Author">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+        </a>
       </div>
     </header>
+
+    <!-- Settings Panel (dropdown style) -->
+    <div id="settingsPanel" class="settings-panel hidden">
+      <div class="settings-header">
+        <h3>Settings</h3>
+        <button id="closeSettingsBtn" class="close-btn">✕</button>
+      </div>
+      
+      <div class="settings-section">
+        <label class="checkbox-option compact">
+          <input type="checkbox" id="enableAiAssistant">
+          <span class="checkmark"></span>
+          Enable AI Sidebar
+        </label>
+        
+        <div class="ai-settings hidden" id="aiSettings">
+          <div class="setting-row">
+            <label for="popupAiProvider">Provider</label>
+            <select id="popupAiProvider">
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="google">Google</option>
+              <option value="openrouter">OpenRouter</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <label for="popupApiKey">API Key</label>
+            <input type="password" id="popupApiKey" placeholder="sk-...">
+          </div>
+          <button class="secondary-btn" id="saveAiSettingsBtn">Save</button>
+        </div>
+      </div>
+      
+      <div class="settings-section" style="border-top: 1px solid var(--border); padding-top: 10px; margin-top: 4px;">
+        <p class="help-text" style="margin: 0; font-size: 0.7rem;">Apex Agent v1.6.0</p>
+      </div>
+    </div>
 
     <!-- Tabs -->
     <nav class="tabs">
@@ -135,9 +191,9 @@
           </div>
           <div class="config-code">
             <pre id="mcpConfigCode">{
-  "chrome-mcp": {
+  "apex-agent": {
     "command": "node",
-    "args": ["/path/to/ChromeMCP/mcp-server/index.js"]
+    "args": ["/path/to/ApexAgent/mcp-server/index.js"]
   }
 }</pre>
             <button class="copy-config-btn" id="copyConfigBtn">Copy</button>
@@ -363,17 +419,10 @@
 
     <!-- Footer -->
     <footer class="footer">
-      <span class="version">v1.3.0</span>
+      <span class="version">v1.6.0</span>
       <div class="footer-links">
         <a href="#" id="shortcutsLink">Shortcuts</a>
         <a href="#" id="helpLink">Help</a>
-        <a href="https://rtbruhan.github.io" target="_blank" id="authorLink" class="author-link">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-            <circle cx="12" cy="7" r="4"/>
-          </svg>
-          Author
-        </a>
       </div>
     </footer>
   </div>

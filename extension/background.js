@@ -1,4 +1,4 @@
-// Chrome MCP - Background Service Worker
+// Apex Agent - Background Service Worker
 // Handles communication between popup, content scripts, and MCP server
 
 // State
@@ -6,7 +6,16 @@ let mcpServerRunning = false;
 let mcpPort = 3052;
 let mcpHost = 'localhost';
 let agentEnabled = true;
-let agentPermissions = {};
+let agentPermissions = {
+  mouse: true,
+  keyboard: true,
+  navigation: true,
+  scripts: true,
+  screenshot: true,
+  showCursor: true,
+  highlightTarget: true,
+  showTooltips: true
+};
 let mcpWebSocket = null;
 let reconnectAttempts = 0;
 let reconnectTimer = null;
@@ -20,21 +29,21 @@ function updateBadge(connected, reconnecting = false) {
   if (connected) {
     chrome.action.setBadgeText({ text: '●' });
     chrome.action.setBadgeBackgroundColor({ color: '#22c55e' }); // Green
-    chrome.action.setTitle({ title: 'Chrome MCP - Connected' });
+    chrome.action.setTitle({ title: 'Apex Agent - Connected' });
   } else if (reconnecting) {
     chrome.action.setBadgeText({ text: '◐' });
     chrome.action.setBadgeBackgroundColor({ color: '#f59e0b' }); // Orange
-    chrome.action.setTitle({ title: 'Chrome MCP - Reconnecting...' });
+    chrome.action.setTitle({ title: 'Apex Agent - Reconnecting...' });
   } else {
     chrome.action.setBadgeText({ text: '○' });
     chrome.action.setBadgeBackgroundColor({ color: '#666666' }); // Gray
-    chrome.action.setTitle({ title: 'Chrome MCP - Disconnected' });
+    chrome.action.setTitle({ title: 'Apex Agent - Disconnected' });
   }
 }
 
 // Initialize
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('Chrome MCP installed');
+  console.log('Apex Agent installed');
   updateBadge(false);
   
   chrome.storage.local.set({
@@ -58,6 +67,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 async function handleMessage(message, sender) {
   switch (message.type) {
+    case 'SIDEBAR_TOOL_CALL':
+      // Handle tool calls from the AI sidebar
+      return await executeToolCall(message.tool, message.params);
+    
+    case 'OPEN_SIDEBAR':
+      // Open the side panel
+      try {
+        await chrome.sidePanel.open({ windowId: (await chrome.windows.getCurrent()).id });
+        return { success: true };
+      } catch (e) {
+        return { error: e.message };
+      }
+    
     case 'GET_MCP_STATUS':
       return { connected: mcpServerRunning, reconnecting: reconnectTimer !== null };
     
@@ -139,7 +161,7 @@ async function startMCPServer(port, host) {
         
         mcpWebSocket.send(JSON.stringify({
           type: 'register',
-          client: 'chrome-mcp'
+          client: 'apex-agent'
         }));
         
         // Start keepalive ping
@@ -254,17 +276,23 @@ async function executeToolCall(tool, params) {
   const noAgentRequired = [
     'browser_snapshot', 'get_page_info', 
     'list_extensions', 'reload_extension', 'get_extension_info', 
-    'enable_extension', 'disable_extension'
+    'enable_extension', 'disable_extension',
+    'open_extension_popup', 'open_extension_options', 'open_extension_devtools',
+    'open_extension_errors', 'trigger_extension_action', 'get_extension_popup_content', 
+    'interact_with_extension', 'close_tab', 'cdp_attach', 'cdp_detach', 'cdp_command'
   ];
   
   if (!agentEnabled && !noAgentRequired.includes(tool)) {
     return { error: 'Agent control is disabled' };
   }
   
-  // Extension management tools don't need a tab
+  // Tools that manage their own tabs or don't need one
   const noTabRequired = [
     'list_extensions', 'reload_extension', 'get_extension_info',
-    'enable_extension', 'disable_extension'
+    'enable_extension', 'disable_extension',
+    'open_extension_popup', 'open_extension_options', 'open_extension_devtools',
+    'open_extension_errors', 'trigger_extension_action', 'get_extension_popup_content', 
+    'interact_with_extension', 'close_tab'
   ];
   
   let tab = null;
@@ -464,6 +492,92 @@ async function executeToolCall(tool, params) {
       
       case 'disable_extension':
         return await setExtensionEnabled(params.extensionId, false);
+      
+      // ===== EXTENSION POPUP INTERACTION =====
+      case 'open_extension_popup':
+        return await openExtensionPopup(params.extensionId, params);
+      
+      case 'open_extension_options':
+        return await openExtensionOptionsPage(params.extensionId);
+      
+      case 'open_extension_devtools':
+        return await openExtensionDevTools(params.extensionId);
+      
+      case 'open_extension_errors':
+        return await openExtensionErrors(params.extensionId);
+      
+      case 'trigger_extension_action':
+        return await triggerExtensionAction(params.extensionId);
+      
+      case 'get_extension_popup_content':
+        return await getExtensionPopupContent(params.extensionId, params);
+      
+      case 'interact_with_extension':
+        return await interactWithExtensionPopup(params.extensionId, params.actions || []);
+      
+      case 'close_tab':
+        return await closeExtensionTab(params.tabId);
+      
+      // ===== CDP DEVTOOLS TOOLS =====
+      case 'cdp_attach':
+        return await attachDebugger(tab.id);
+      
+      case 'cdp_detach':
+        return await detachDebugger(tab.id);
+      
+      case 'cdp_command':
+        return await sendCDPCommand(tab.id, params.method, params.params || {});
+      
+      case 'get_event_listeners':
+        return await getEventListeners(tab.id, params.selector);
+      
+      case 'start_network_monitor':
+        return await startNetworkMonitoring(tab.id);
+      
+      case 'get_network_requests':
+        return await getNetworkRequests(tab.id);
+      
+      case 'start_cpu_profile':
+        return await startCPUProfile(tab.id);
+      
+      case 'stop_cpu_profile':
+        return await stopCPUProfile(tab.id);
+      
+      case 'take_heap_snapshot':
+        return await takeHeapSnapshot(tab.id);
+      
+      case 'set_dom_breakpoint':
+        return await setDOMBreakpoint(tab.id, params.selector, params.type || 'subtree-modified');
+      
+      case 'remove_dom_breakpoint':
+        return await removeDOMBreakpoint(tab.id, params.selector, params.type || 'subtree-modified');
+      
+      case 'start_css_coverage':
+        return await startCSSCoverage(tab.id);
+      
+      case 'stop_css_coverage':
+        return await stopCSSCoverage(tab.id);
+      
+      case 'start_js_coverage':
+        return await startJSCoverage(tab.id);
+      
+      case 'stop_js_coverage':
+        return await stopJSCoverage(tab.id);
+      
+      case 'get_cdp_console_logs':
+        return await getCDPConsoleLogs(tab.id);
+      
+      case 'get_performance_metrics':
+        return await getPerformanceMetrics(tab.id);
+      
+      case 'get_accessibility_tree':
+        return await getAccessibilityTree(tab.id, params.selector);
+      
+      case 'get_layer_tree':
+        return await getLayerTree(tab.id);
+      
+      case 'get_animations':
+        return await getAnimations(tab.id);
       
       default:
         return { error: `Unknown tool: ${tool}` };
@@ -687,6 +801,707 @@ async function setExtensionEnabled(extensionId, enabled) {
   }
 }
 
+// ============ EXTENSION POPUP INTERACTION ============
+async function openExtensionPopup(extensionId, options = {}) {
+  try {
+    if (!extensionId) {
+      return { error: 'Extension ID is required' };
+    }
+    
+    // Get extension info to find popup URL
+    const ext = await chrome.management.get(extensionId);
+    if (!ext) {
+      return { error: `Extension ${extensionId} not found` };
+    }
+    
+    // Construct popup URL - standard locations
+    const popupUrls = [
+      `chrome-extension://${extensionId}/popup.html`,
+      `chrome-extension://${extensionId}/popup/popup.html`,
+      `chrome-extension://${extensionId}/index.html`,
+      `chrome-extension://${extensionId}/src/popup.html`,
+      `chrome-extension://${extensionId}/dist/popup.html`
+    ];
+    
+    // Use custom path if provided
+    if (options.popupPath) {
+      popupUrls.unshift(`chrome-extension://${extensionId}/${options.popupPath}`);
+    }
+    
+    // Try to open the popup as a new tab
+    let tab = null;
+    for (const url of popupUrls) {
+      try {
+        tab = await chrome.tabs.create({ 
+          url, 
+          active: true,
+          windowId: options.windowId
+        });
+        
+        // Wait for tab to load
+        await new Promise((resolve) => {
+          const listener = (tabId, info) => {
+            if (tabId === tab.id && info.status === 'complete') {
+              chrome.tabs.onUpdated.removeListener(listener);
+              resolve();
+            }
+          };
+          chrome.tabs.onUpdated.addListener(listener);
+          setTimeout(resolve, 5000); // Timeout after 5s
+        });
+        
+        // Check if page loaded successfully (not error page)
+        const updatedTab = await chrome.tabs.get(tab.id);
+        if (!updatedTab.url?.includes('chrome-error://')) {
+          return {
+            success: true,
+            tabId: tab.id,
+            url: updatedTab.url,
+            extensionName: ext.name,
+            message: `Opened ${ext.name} popup in tab ${tab.id}`
+          };
+        }
+      } catch (e) {
+        // Try next URL
+        continue;
+      }
+    }
+    
+    return { error: `Could not find popup for extension ${ext.name}. Try specifying popupPath.` };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+async function openExtensionOptionsPage(extensionId) {
+  try {
+    if (!extensionId) {
+      return { error: 'Extension ID is required' };
+    }
+    
+    const ext = await chrome.management.get(extensionId);
+    if (!ext) {
+      return { error: `Extension ${extensionId} not found` };
+    }
+    
+    if (!ext.optionsUrl) {
+      return { error: `Extension ${ext.name} has no options page` };
+    }
+    
+    const tab = await chrome.tabs.create({ url: ext.optionsUrl, active: true });
+    
+    // Wait for load
+    await new Promise((resolve) => {
+      const listener = (tabId, info) => {
+        if (tabId === tab.id && info.status === 'complete') {
+          chrome.tabs.onUpdated.removeListener(listener);
+          resolve();
+        }
+      };
+      chrome.tabs.onUpdated.addListener(listener);
+      setTimeout(resolve, 5000);
+    });
+    
+    return {
+      success: true,
+      tabId: tab.id,
+      url: ext.optionsUrl,
+      extensionName: ext.name,
+      message: `Opened ${ext.name} options page in tab ${tab.id}`
+    };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+async function openExtensionDevTools(extensionId) {
+  try {
+    if (!extensionId) {
+      return { error: 'Extension ID is required' };
+    }
+    
+    // Open the extension's service worker/background page in DevTools
+    // This opens chrome://extensions/?id=extensionId
+    const url = `chrome://extensions/?id=${extensionId}`;
+    const tab = await chrome.tabs.create({ url, active: true });
+    
+    return {
+      success: true,
+      tabId: tab.id,
+      url,
+      message: `Opened extension management page for ${extensionId}. Click "Inspect views" to see service worker.`
+    };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+async function openExtensionErrors(extensionId) {
+  try {
+    if (!extensionId) {
+      return { error: 'Extension ID is required' };
+    }
+    
+    // Open the extension errors page directly
+    const url = `chrome://extensions/?id=${extensionId}&errors`;
+    const tab = await chrome.tabs.create({ url, active: true });
+    
+    return {
+      success: true,
+      tabId: tab.id,
+      url,
+      message: `Opened extension errors page for ${extensionId}.`
+    };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+async function triggerExtensionAction(extensionId) {
+  try {
+    if (!extensionId) {
+      return { error: 'Extension ID is required' };
+    }
+    
+    // Note: chrome.action.openPopup() requires user gesture in most browsers
+    // We'll try it, but fallback to opening as tab
+    try {
+      // This only works for the current extension or with special permissions
+      await chrome.action.openPopup();
+      return { success: true, message: 'Popup triggered via action API' };
+    } catch (e) {
+      // Fallback: open as tab
+      return await openExtensionPopup(extensionId);
+    }
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+async function getExtensionPopupContent(extensionId, options = {}) {
+  try {
+    // First open the popup
+    const result = await openExtensionPopup(extensionId, options);
+    if (result.error) return result;
+    
+    // Give it a moment to render
+    await new Promise(r => setTimeout(r, 500));
+    
+    // Get snapshot of the popup content
+    const snapshot = await forwardAgentAction({ type: 'GET_SNAPSHOT' }, result.tabId);
+    
+    return {
+      ...result,
+      snapshot
+    };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+async function interactWithExtensionPopup(extensionId, actions) {
+  try {
+    // Open popup first
+    const openResult = await openExtensionPopup(extensionId);
+    if (openResult.error) return openResult;
+    
+    const tabId = openResult.tabId;
+    const results = [];
+    
+    // Wait for popup to fully load
+    await new Promise(r => setTimeout(r, 500));
+    
+    // Execute each action in sequence
+    for (const action of actions) {
+      let result;
+      switch (action.type) {
+        case 'click':
+          result = await forwardAgentAction({
+            type: 'CLICK',
+            selector: action.selector,
+            options: action.options || {}
+          }, tabId);
+          break;
+        case 'type':
+          result = await forwardAgentAction({
+            type: 'TYPE',
+            selector: action.selector,
+            text: action.text,
+            options: action.options || {}
+          }, tabId);
+          break;
+        case 'snapshot':
+          result = await forwardAgentAction({ type: 'GET_SNAPSHOT' }, tabId);
+          break;
+        case 'wait':
+          await new Promise(r => setTimeout(r, action.ms || 500));
+          result = { success: true, waited: action.ms || 500 };
+          break;
+        default:
+          result = { error: `Unknown action type: ${action.type}` };
+      }
+      
+      results.push({ action: action.type, result });
+      
+      // Small delay between actions
+      if (action.delay) {
+        await new Promise(r => setTimeout(r, action.delay));
+      }
+    }
+    
+    return {
+      success: true,
+      extensionId,
+      tabId,
+      results
+    };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+async function closeExtensionTab(tabId) {
+  try {
+    await chrome.tabs.remove(tabId);
+    return { success: true, message: `Tab ${tabId} closed` };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+// ============ CDP DEBUGGER MANAGER ============
+let debuggerAttached = new Map(); // tabId -> { attached, domains }
+
+async function attachDebugger(tabId) {
+  if (debuggerAttached.get(tabId)?.attached) {
+    return { success: true, already: true };
+  }
+  
+  try {
+    await chrome.debugger.attach({ tabId }, '1.3');
+    debuggerAttached.set(tabId, { attached: true, domains: new Set() });
+    console.log(`CDP debugger attached to tab ${tabId}`);
+    return { success: true };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+async function detachDebugger(tabId) {
+  if (!debuggerAttached.get(tabId)?.attached) {
+    return { success: true, already: true };
+  }
+  
+  try {
+    await chrome.debugger.detach({ tabId });
+    debuggerAttached.delete(tabId);
+    console.log(`CDP debugger detached from tab ${tabId}`);
+    return { success: true };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+async function sendCDPCommand(tabId, method, params = {}) {
+  // Auto-attach if not attached
+  if (!debuggerAttached.get(tabId)?.attached) {
+    const attachResult = await attachDebugger(tabId);
+    if (attachResult.error) return attachResult;
+  }
+  
+  try {
+    const result = await chrome.debugger.sendCommand({ tabId }, method, params);
+    return result;
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+async function enableCDPDomain(tabId, domain) {
+  const tabData = debuggerAttached.get(tabId);
+  if (tabData?.domains?.has(domain)) {
+    return { success: true, already: true };
+  }
+  
+  const result = await sendCDPCommand(tabId, `${domain}.enable`);
+  if (!result?.error) {
+    tabData?.domains?.add(domain);
+  }
+  return result;
+}
+
+// CDP-based Event Listeners
+async function getEventListeners(tabId, selector) {
+  try {
+    await enableCDPDomain(tabId, 'DOM');
+    await enableCDPDomain(tabId, 'DOMDebugger');
+    
+    // Get document
+    const doc = await sendCDPCommand(tabId, 'DOM.getDocument', { depth: 0 });
+    if (doc?.error) return doc;
+    
+    // Query for element
+    const nodeResult = await sendCDPCommand(tabId, 'DOM.querySelector', {
+      nodeId: doc.root.nodeId,
+      selector: selector
+    });
+    
+    if (nodeResult?.error || !nodeResult?.nodeId) {
+      return { error: `Element not found: ${selector}` };
+    }
+    
+    // Resolve to object for getEventListeners
+    const objResult = await sendCDPCommand(tabId, 'DOM.resolveNode', {
+      nodeId: nodeResult.nodeId
+    });
+    
+    if (objResult?.error) return objResult;
+    
+    // Get event listeners
+    const listeners = await sendCDPCommand(tabId, 'DOMDebugger.getEventListeners', {
+      objectId: objResult.object.objectId,
+      depth: 1,
+      pierce: true
+    });
+    
+    if (listeners?.error) return listeners;
+    
+    return {
+      selector,
+      listeners: listeners.listeners?.map(l => ({
+        type: l.type,
+        useCapture: l.useCapture,
+        passive: l.passive,
+        once: l.once,
+        handler: l.handler?.description?.slice(0, 200),
+        scriptId: l.scriptId,
+        lineNumber: l.lineNumber,
+        columnNumber: l.columnNumber
+      })) || []
+    };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+// CDP Network monitoring
+let networkRequests = new Map(); // tabId -> requests[]
+
+async function startNetworkMonitoring(tabId) {
+  try {
+    await enableCDPDomain(tabId, 'Network');
+    networkRequests.set(tabId, []);
+    return { success: true, message: 'Network monitoring started' };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+async function getNetworkRequests(tabId) {
+  return {
+    requests: networkRequests.get(tabId) || [],
+    count: (networkRequests.get(tabId) || []).length
+  };
+}
+
+// CDP Performance profiling
+async function startCPUProfile(tabId) {
+  try {
+    await enableCDPDomain(tabId, 'Profiler');
+    await sendCDPCommand(tabId, 'Profiler.start');
+    return { success: true, message: 'CPU profiling started' };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+async function stopCPUProfile(tabId) {
+  try {
+    const profile = await sendCDPCommand(tabId, 'Profiler.stop');
+    return { success: true, profile };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+// CDP Heap profiling
+async function takeHeapSnapshot(tabId) {
+  try {
+    await enableCDPDomain(tabId, 'HeapProfiler');
+    
+    let chunks = [];
+    // Note: In real implementation, we'd need to handle events
+    await sendCDPCommand(tabId, 'HeapProfiler.takeHeapSnapshot', {
+      reportProgress: false
+    });
+    
+    return { success: true, message: 'Heap snapshot taken' };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+// CDP DOM breakpoints
+async function setDOMBreakpoint(tabId, selector, type = 'subtree-modified') {
+  try {
+    await enableCDPDomain(tabId, 'DOM');
+    await enableCDPDomain(tabId, 'DOMDebugger');
+    
+    const doc = await sendCDPCommand(tabId, 'DOM.getDocument', { depth: 0 });
+    if (doc?.error) return doc;
+    
+    const nodeResult = await sendCDPCommand(tabId, 'DOM.querySelector', {
+      nodeId: doc.root.nodeId,
+      selector: selector
+    });
+    
+    if (!nodeResult?.nodeId) {
+      return { error: `Element not found: ${selector}` };
+    }
+    
+    await sendCDPCommand(tabId, 'DOMDebugger.setDOMBreakpoint', {
+      nodeId: nodeResult.nodeId,
+      type: type // 'subtree-modified', 'attribute-modified', 'node-removed'
+    });
+    
+    return { success: true, selector, type };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+async function removeDOMBreakpoint(tabId, selector, type = 'subtree-modified') {
+  try {
+    const doc = await sendCDPCommand(tabId, 'DOM.getDocument', { depth: 0 });
+    if (doc?.error) return doc;
+    
+    const nodeResult = await sendCDPCommand(tabId, 'DOM.querySelector', {
+      nodeId: doc.root.nodeId,
+      selector: selector
+    });
+    
+    if (!nodeResult?.nodeId) {
+      return { error: `Element not found: ${selector}` };
+    }
+    
+    await sendCDPCommand(tabId, 'DOMDebugger.removeDOMBreakpoint', {
+      nodeId: nodeResult.nodeId,
+      type: type
+    });
+    
+    return { success: true, selector, type };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+// CDP CSS Coverage
+async function startCSSCoverage(tabId) {
+  try {
+    await enableCDPDomain(tabId, 'CSS');
+    await sendCDPCommand(tabId, 'CSS.startRuleUsageTracking');
+    return { success: true, message: 'CSS coverage tracking started' };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+async function stopCSSCoverage(tabId) {
+  try {
+    const result = await sendCDPCommand(tabId, 'CSS.stopRuleUsageTracking');
+    return { success: true, coverage: result };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+// CDP JS Coverage
+async function startJSCoverage(tabId) {
+  try {
+    await enableCDPDomain(tabId, 'Profiler');
+    await sendCDPCommand(tabId, 'Profiler.startPreciseCoverage', {
+      callCount: true,
+      detailed: true
+    });
+    return { success: true, message: 'JS coverage tracking started' };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+async function stopJSCoverage(tabId) {
+  try {
+    const result = await sendCDPCommand(tabId, 'Profiler.takePreciseCoverage');
+    await sendCDPCommand(tabId, 'Profiler.stopPreciseCoverage');
+    return { success: true, coverage: result };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+// CDP Runtime - Console
+async function getCDPConsoleLogs(tabId) {
+  try {
+    await enableCDPDomain(tabId, 'Runtime');
+    // Console messages are collected via events
+    // Return stored messages
+    return { logs: consoleLogs.get(tabId) || [] };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+let consoleLogs = new Map(); // tabId -> logs[]
+
+// CDP Performance metrics
+async function getPerformanceMetrics(tabId) {
+  try {
+    await enableCDPDomain(tabId, 'Performance');
+    const metrics = await sendCDPCommand(tabId, 'Performance.getMetrics');
+    return { metrics: metrics?.metrics || [] };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+// CDP Accessibility
+async function getAccessibilityTree(tabId, selector) {
+  try {
+    await enableCDPDomain(tabId, 'Accessibility');
+    await enableCDPDomain(tabId, 'DOM');
+    
+    let nodeId = null;
+    if (selector) {
+      const doc = await sendCDPCommand(tabId, 'DOM.getDocument', { depth: 0 });
+      const nodeResult = await sendCDPCommand(tabId, 'DOM.querySelector', {
+        nodeId: doc.root.nodeId,
+        selector
+      });
+      nodeId = nodeResult?.nodeId;
+    }
+    
+    const tree = await sendCDPCommand(tabId, 'Accessibility.getFullAXTree', {
+      depth: 3,
+      max_depth: 3
+    });
+    
+    return { tree: tree?.nodes?.slice(0, 50) || [] };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+// CDP Layer info
+async function getLayerTree(tabId) {
+  try {
+    await enableCDPDomain(tabId, 'LayerTree');
+    const layers = await sendCDPCommand(tabId, 'LayerTree.getLayers');
+    return { layers: layers?.layers || [] };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+// CDP Animation
+async function getAnimations(tabId) {
+  try {
+    await enableCDPDomain(tabId, 'Animation');
+    // Animations are tracked via events
+    return { animations: animations.get(tabId) || [] };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+let animations = new Map();
+
+// Handle debugger events
+chrome.debugger.onEvent.addListener((source, method, params) => {
+  const tabId = source.tabId;
+  
+  // Network events
+  if (method === 'Network.requestWillBeSent') {
+    const requests = networkRequests.get(tabId) || [];
+    requests.push({
+      requestId: params.requestId,
+      url: params.request.url,
+      method: params.request.method,
+      timestamp: params.timestamp,
+      type: params.type,
+      initiator: params.initiator?.type
+    });
+    if (requests.length > 100) requests.shift();
+    networkRequests.set(tabId, requests);
+  }
+  
+  if (method === 'Network.responseReceived') {
+    const requests = networkRequests.get(tabId) || [];
+    const req = requests.find(r => r.requestId === params.requestId);
+    if (req) {
+      req.status = params.response.status;
+      req.statusText = params.response.statusText;
+      req.mimeType = params.response.mimeType;
+      req.responseTime = params.timestamp;
+    }
+  }
+  
+  // Console events
+  if (method === 'Runtime.consoleAPICalled') {
+    const logs = consoleLogs.get(tabId) || [];
+    logs.push({
+      type: params.type,
+      args: params.args?.map(a => a.value || a.description || a.type).slice(0, 5),
+      timestamp: params.timestamp,
+      stackTrace: params.stackTrace?.callFrames?.[0]
+    });
+    if (logs.length > 100) logs.shift();
+    consoleLogs.set(tabId, logs);
+  }
+  
+  // Exception events
+  if (method === 'Runtime.exceptionThrown') {
+    const logs = consoleLogs.get(tabId) || [];
+    logs.push({
+      type: 'error',
+      exception: params.exceptionDetails?.text,
+      description: params.exceptionDetails?.exception?.description?.slice(0, 200),
+      url: params.exceptionDetails?.url,
+      lineNumber: params.exceptionDetails?.lineNumber,
+      timestamp: params.timestamp
+    });
+    consoleLogs.set(tabId, logs);
+  }
+  
+  // Animation events
+  if (method === 'Animation.animationCreated' || method === 'Animation.animationStarted') {
+    const anims = animations.get(tabId) || [];
+    anims.push({
+      id: params.id || params.animation?.id,
+      name: params.animation?.name,
+      type: params.animation?.type,
+      duration: params.animation?.source?.duration,
+      delay: params.animation?.source?.delay
+    });
+    if (anims.length > 50) anims.shift();
+    animations.set(tabId, anims);
+  }
+});
+
+// Cleanup on tab close
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (debuggerAttached.has(tabId)) {
+    debuggerAttached.delete(tabId);
+  }
+  networkRequests.delete(tabId);
+  consoleLogs.delete(tabId);
+  animations.delete(tabId);
+});
+
+chrome.debugger.onDetach.addListener((source, reason) => {
+  console.log(`Debugger detached from tab ${source.tabId}: ${reason}`);
+  debuggerAttached.delete(source.tabId);
+});
+
 // ============ EVENT LISTENERS ============
 chrome.runtime.onConnectExternal.addListener((port) => {
   port.onMessage.addListener(async (message) => {
@@ -736,4 +1551,4 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
-console.log('Chrome MCP started');
+console.log('Apex Agent started');

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apex Agent - AI Assistant</title>
+  <link rel="stylesheet" href="sidebar.css">
+</head>
+<body>
+  <div class="sidebar-container">
+    <!-- Header -->
+    <header class="sidebar-header">
+      <div class="header-title">
+        <span class="logo">◈</span>
+        <span>Apex Agent</span>
+      </div>
+      <button id="settingsBtn" class="icon-btn" title="Settings">⚙</button>
+    </header>
+
+    <!-- Settings Panel (hidden by default) -->
+    <div id="settingsPanel" class="settings-panel hidden">
+      <div class="settings-header">
+        <h3>AI Settings</h3>
+        <button id="closeSettings" class="icon-btn">✕</button>
+      </div>
+      
+      <div class="setting-group">
+        <label for="aiProvider">AI Provider</label>
+        <select id="aiProvider">
+          <option value="openai">OpenAI (GPT-4)</option>
+          <option value="anthropic">Anthropic (Claude)</option>
+          <option value="google">Google (Gemini)</option>
+          <option value="openrouter">OpenRouter</option>
+        </select>
+      </div>
+      
+      <div class="setting-group">
+        <label for="apiKey">API Key</label>
+        <div class="input-with-btn">
+          <input type="password" id="apiKey" placeholder="Enter your API key...">
+          <button id="toggleApiKey" class="icon-btn" title="Show/Hide">👁</button>
+        </div>
+      </div>
+      
+      <div class="setting-group">
+        <label for="modelSelect">Model</label>
+        <select id="modelSelect">
+          <option value="gpt-4o">GPT-4o</option>
+          <option value="gpt-4o-mini">GPT-4o Mini</option>
+          <option value="gpt-4-turbo">GPT-4 Turbo</option>
+          <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
+          <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
+          <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+          <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+        </select>
+      </div>
+      
+      <div class="setting-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="autoExecute" checked>
+          <span>Auto-execute actions</span>
+        </label>
+        <small>AI will automatically perform browser actions</small>
+      </div>
+      
+      <div class="setting-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="showThinking">
+          <span>Show AI thinking</span>
+        </label>
+      </div>
+      
+      <button id="saveSettings" class="btn primary">Save Settings</button>
+      <div id="settingsStatus" class="status-msg"></div>
+    </div>
+
+    <!-- Chat Container -->
+    <div id="chatContainer" class="chat-container">
+      <div id="chatMessages" class="chat-messages">
+        <!-- Welcome message -->
+        <div class="message assistant">
+          <div class="message-content">
+            <p>👋 Hi! I'm your AI browser assistant.</p>
+            <p>I can help you:</p>
+            <ul>
+              <li>Navigate to websites</li>
+              <li>Click buttons and fill forms</li>
+              <li>Take screenshots</li>
+              <li>Inspect elements</li>
+              <li>Debug web pages</li>
+              <li>Test extensions</li>
+            </ul>
+            <p><strong>Set up your API key in settings to get started!</strong></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Input Area -->
+    <div class="input-area">
+      <div class="quick-actions">
+        <button class="quick-btn" data-action="screenshot">📸 Screenshot</button>
+        <button class="quick-btn" data-action="snapshot">🔍 Inspect</button>
+        <button class="quick-btn" data-action="console">📋 Console</button>
+      </div>
+      <div class="input-row">
+        <textarea id="userInput" placeholder="Tell me what to do..." rows="1"></textarea>
+        <button id="sendBtn" class="send-btn" disabled>
+          <span class="send-icon">➤</span>
+        </button>
+      </div>
+      <div class="input-hint">
+        <span id="statusIndicator" class="status-dot disconnected"></span>
+        <span id="statusText">API not configured</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="sidebar.js"></script>
+</body>
+</html>
+

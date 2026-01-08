@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Chrome MCP",
-  "version": "1.3.0",
+  "name": "Apex Agent",
+  "version": "1.6.0",
   "description": "MCP server integration for AI browser control, interaction recording, and debugging",
   "permissions": [
     "activeTab",
@@ -10,7 +10,9 @@
     "storage",
     "webNavigation",
     "alarms",
-    "management"
+    "management",
+    "debugger",
+    "sidePanel"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -21,7 +23,10 @@
   },
   "action": {
     "default_popup": "popup/popup.html",
-    "default_title": "Chrome MCP"
+    "default_title": "Apex Agent"
+  },
+  "side_panel": {
+    "default_path": "sidebar/sidebar.html"
   },
   "content_scripts": [
     {
@@ -33,7 +38,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["content/*"],
+      "resources": ["content/*", "sidebar/*"],
       "matches": ["<all_urls>"]
     }
   ],

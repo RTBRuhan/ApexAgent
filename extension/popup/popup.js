@@ -1,4 +1,4 @@
-// Chrome MCP - Popup Script
+// Apex Agent - Popup Script
 
 // State
 let isRecording = false;
@@ -82,6 +82,7 @@ async function init() {
   setupAgentControls();
   setupKeyboardShortcuts();
   setupFooterLinks();
+  setupSettingsPanel();
   await loadSettings();
   await checkMCPStatus();
   await loadRecordingState();
@@ -512,7 +513,7 @@ async function exportLog() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `chrome-mcp-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `apex-agent-${new Date().toISOString().slice(0, 10)}.json`;
   a.click();
   URL.revokeObjectURL(url);
   showToast('Exported successfully');
@@ -597,9 +598,9 @@ async function toggleMCPServer() {
 function updateMCPConfig() {
   const port = elements.mcpPort.value;
   const config = {
-    "chrome-mcp": {
+    "apex-agent": {
       command: "node",
-      args: ["/path/to/ChromeMCP/mcp-server/index.js"],
+      args: ["/path/to/ApexAgent/mcp-server/index.js"],
       env: { PORT: port }
     }
   };
@@ -725,7 +726,75 @@ function setupFooterLinks() {
   
   elements.helpLink.addEventListener('click', (e) => {
     e.preventDefault();
-    chrome.tabs.create({ url: 'https://github.com' });
+    chrome.tabs.create({ url: 'https://github.com/RTBRuhan/ApexAgent' });
+  });
+}
+
+// Settings Panel
+function setupSettingsPanel() {
+  const settingsBtn = document.getElementById('settingsBtn');
+  const settingsPanel = document.getElementById('settingsPanel');
+  const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+  const enableAiAssistant = document.getElementById('enableAiAssistant');
+  const aiSettings = document.getElementById('aiSettings');
+  const openAiSidebarBtn = document.getElementById('openAiSidebarBtn');
+  const popupAiProvider = document.getElementById('popupAiProvider');
+  const popupApiKey = document.getElementById('popupApiKey');
+  const saveAiSettingsBtn = document.getElementById('saveAiSettingsBtn');
+  
+  // Toggle settings panel
+  settingsBtn.addEventListener('click', () => {
+    settingsPanel.classList.toggle('hidden');
+  });
+  
+  closeSettingsBtn.addEventListener('click', () => {
+    settingsPanel.classList.add('hidden');
+  });
+  
+  // Load AI settings
+  chrome.storage.local.get(['aiEnabled', 'aiProvider', 'aiApiKey'], (data) => {
+    enableAiAssistant.checked = data.aiEnabled || false;
+    popupAiProvider.value = data.aiProvider || 'openai';
+    popupApiKey.value = data.aiApiKey || '';
+    
+    // Show/hide AI settings and button
+    if (data.aiEnabled) {
+      aiSettings.classList.remove('hidden');
+      openAiSidebarBtn.classList.remove('hidden');
+    }
+  });
+  
+  // Enable/disable AI assistant
+  enableAiAssistant.addEventListener('change', () => {
+    const enabled = enableAiAssistant.checked;
+    chrome.storage.local.set({ aiEnabled: enabled });
+    
+    if (enabled) {
+      aiSettings.classList.remove('hidden');
+      openAiSidebarBtn.classList.remove('hidden');
+    } else {
+      aiSettings.classList.add('hidden');
+      openAiSidebarBtn.classList.add('hidden');
+    }
+  });
+  
+  // Save AI settings
+  saveAiSettingsBtn.addEventListener('click', async () => {
+    await chrome.storage.local.set({
+      aiProvider: popupAiProvider.value,
+      aiApiKey: popupApiKey.value
+    });
+    showToast('AI settings saved!', 'success');
+  });
+  
+  // Open AI sidebar
+  openAiSidebarBtn.addEventListener('click', async () => {
+    try {
+      await chrome.sidePanel.open({ windowId: (await chrome.windows.getCurrent()).id });
+      window.close();
+    } catch (e) {
+      showToast('Failed to open sidebar: ' + e.message, 'error');
+    }
   });
 }
 

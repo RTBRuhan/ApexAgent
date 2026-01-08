@@ -1,6 +1,6 @@
-# Chrome MCP Server
+# Apex Agent Server
 
-Node.js MCP (Model Context Protocol) server that enables AI tools to control Chrome/Edge browser through the Chrome MCP extension.
+Node.js MCP (Model Context Protocol) server that enables AI tools to control Chrome/Edge browser through the Apex Agent extension.
 
 ## Installation
 
@@ -32,7 +32,7 @@ Add to your AI tool's MCP settings:
 
 ```json
 {
-  "chrome-mcp": {
+  "apex-agent": {
     "command": "node",
     "args": ["/path/to/mcp-server/index.js"]
   }
@@ -72,7 +72,7 @@ AI Tool (Cursor/Windsurf)
     ↓ stdin/stdout (MCP Protocol)
 MCP Server (index.js)
     ↓ WebSocket
-Chrome MCP Extension
+Apex Agent Extension
     ↓ Chrome APIs
 Browser
 ```

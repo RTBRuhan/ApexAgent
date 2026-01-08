@@ -11,7 +11,6 @@ const log = (m) => process.stderr.write(`[MCP] ${m}\n`);
 let chromeClient = null;
 let pendingRequests = new Map();
 let requestId = 0;
-let serverStarted = false;
 
 const TOOLS = [
   // Browser Control
@@ -46,10 +45,42 @@ const TOOLS = [
   
   // Extension Management (for extension developers)
   { name: 'list_extensions', description: 'List all installed extensions', inputSchema: { type: 'object', properties: { includeDisabled: { type: 'boolean', default: true } } } },
-  { name: 'reload_extension', description: 'Reload an extension by ID (toggle off/on). Use "self" to reload Chrome MCP', inputSchema: { type: 'object', properties: { extensionId: { type: 'string' } }, required: ['extensionId'] } },
+  { name: 'reload_extension', description: 'Reload an extension by ID (toggle off/on). Use "self" to reload Apex Agent', inputSchema: { type: 'object', properties: { extensionId: { type: 'string' } }, required: ['extensionId'] } },
   { name: 'get_extension_info', description: 'Get detailed info about an extension', inputSchema: { type: 'object', properties: { extensionId: { type: 'string' } }, required: ['extensionId'] } },
   { name: 'enable_extension', description: 'Enable an extension by ID', inputSchema: { type: 'object', properties: { extensionId: { type: 'string' } }, required: ['extensionId'] } },
-  { name: 'disable_extension', description: 'Disable an extension by ID', inputSchema: { type: 'object', properties: { extensionId: { type: 'string' } }, required: ['extensionId'] } }
+  { name: 'disable_extension', description: 'Disable an extension by ID', inputSchema: { type: 'object', properties: { extensionId: { type: 'string' } }, required: ['extensionId'] } },
+  
+  // Extension Popup Interaction (for automated extension testing)
+  { name: 'open_extension_popup', description: 'Open an extension popup as a tab for interaction', inputSchema: { type: 'object', properties: { extensionId: { type: 'string', description: 'Extension ID to open' }, popupPath: { type: 'string', description: 'Custom popup path if not standard (e.g., "src/popup.html")' } }, required: ['extensionId'] } },
+  { name: 'open_extension_options', description: 'Open an extension options/settings page', inputSchema: { type: 'object', properties: { extensionId: { type: 'string' } }, required: ['extensionId'] } },
+  { name: 'open_extension_devtools', description: 'Open extension management page to access DevTools', inputSchema: { type: 'object', properties: { extensionId: { type: 'string' } }, required: ['extensionId'] } },
+  { name: 'open_extension_errors', description: 'Open extension errors page directly', inputSchema: { type: 'object', properties: { extensionId: { type: 'string' } }, required: ['extensionId'] } },
+  { name: 'trigger_extension_action', description: 'Try to trigger extension action (open popup)', inputSchema: { type: 'object', properties: { extensionId: { type: 'string' } }, required: ['extensionId'] } },
+  { name: 'get_extension_popup_content', description: 'Open extension popup and get its DOM snapshot', inputSchema: { type: 'object', properties: { extensionId: { type: 'string' }, popupPath: { type: 'string' } }, required: ['extensionId'] } },
+  { name: 'interact_with_extension', description: 'Open extension popup and run a sequence of actions', inputSchema: { type: 'object', properties: { extensionId: { type: 'string' }, actions: { type: 'array', items: { type: 'object', properties: { type: { type: 'string', enum: ['click', 'type', 'snapshot', 'wait'] }, selector: { type: 'string' }, text: { type: 'string' }, ms: { type: 'number' }, delay: { type: 'number' } } }, description: 'Array of actions: {type, selector, text, ms, delay}' } }, required: ['extensionId', 'actions'] } },
+  { name: 'close_tab', description: 'Close a browser tab by ID', inputSchema: { type: 'object', properties: { tabId: { type: 'number' } }, required: ['tabId'] } },
+  
+  // CDP DevTools (Chrome DevTools Protocol - true DevTools access)
+  { name: 'cdp_attach', description: 'Attach Chrome DevTools Protocol debugger to current tab (shows debugging banner)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'cdp_detach', description: 'Detach CDP debugger from current tab', inputSchema: { type: 'object', properties: {} } },
+  { name: 'cdp_command', description: 'Send raw CDP command (advanced)', inputSchema: { type: 'object', properties: { method: { type: 'string', description: 'CDP method like DOM.getDocument, Network.enable' }, params: { type: 'object', description: 'CDP method parameters' } }, required: ['method'] } },
+  { name: 'get_event_listeners', description: 'Get all event listeners attached to an element (click, keydown, etc.)', inputSchema: { type: 'object', properties: { selector: { type: 'string', description: 'CSS selector of element to inspect' } }, required: ['selector'] } },
+  { name: 'start_network_monitor', description: 'Start monitoring network requests via CDP', inputSchema: { type: 'object', properties: {} } },
+  { name: 'get_network_requests', description: 'Get captured network requests (after starting monitor)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'start_cpu_profile', description: 'Start CPU profiling', inputSchema: { type: 'object', properties: {} } },
+  { name: 'stop_cpu_profile', description: 'Stop CPU profiling and get results', inputSchema: { type: 'object', properties: {} } },
+  { name: 'take_heap_snapshot', description: 'Take a heap memory snapshot', inputSchema: { type: 'object', properties: {} } },
+  { name: 'set_dom_breakpoint', description: 'Set a DOM breakpoint on element mutations', inputSchema: { type: 'object', properties: { selector: { type: 'string', description: 'CSS selector' }, type: { type: 'string', enum: ['subtree-modified', 'attribute-modified', 'node-removed'], default: 'subtree-modified' } }, required: ['selector'] } },
+  { name: 'remove_dom_breakpoint', description: 'Remove a DOM breakpoint', inputSchema: { type: 'object', properties: { selector: { type: 'string' }, type: { type: 'string', enum: ['subtree-modified', 'attribute-modified', 'node-removed'], default: 'subtree-modified' } }, required: ['selector'] } },
+  { name: 'start_css_coverage', description: 'Start tracking CSS coverage (unused CSS rules)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'stop_css_coverage', description: 'Stop CSS coverage and get results', inputSchema: { type: 'object', properties: {} } },
+  { name: 'start_js_coverage', description: 'Start tracking JavaScript coverage', inputSchema: { type: 'object', properties: {} } },
+  { name: 'stop_js_coverage', description: 'Stop JS coverage and get results', inputSchema: { type: 'object', properties: {} } },
+  { name: 'get_cdp_console_logs', description: 'Get console logs captured via CDP (more detailed than content script)', inputSchema: { type: 'object', properties: {} } },
+  { name: 'get_performance_metrics', description: 'Get detailed performance metrics via CDP', inputSchema: { type: 'object', properties: {} } },
+  { name: 'get_accessibility_tree', description: 'Get accessibility tree for page or element', inputSchema: { type: 'object', properties: { selector: { type: 'string', description: 'Optional CSS selector to focus on specific element' } } } },
+  { name: 'get_layer_tree', description: 'Get compositing layer information', inputSchema: { type: 'object', properties: {} } },
+  { name: 'get_animations', description: 'Get active CSS/JS animations', inputSchema: { type: 'object', properties: {} } }
 ];
 
 // ============ STDIN - Handle line-based JSON (what Cursor actually sends) ============
@@ -67,7 +98,13 @@ rl.on('line', (line) => {
   }
 });
 
-rl.on('close', () => process.exit(0));
+rl.on('close', () => {
+  // Don't exit if we have WebSocket clients - keep server running for extension
+  log('Stdin closed. WebSocket server still running...');
+});
+
+// Start WebSocket server immediately
+startWsServer();
 
 log('Ready');
 
@@ -90,14 +127,10 @@ function handleMcp(msg) {
       id,
       result: {
         protocolVersion: params?.protocolVersion || '2024-11-05',
-        serverInfo: { name: 'chrome-debug-hand', version: '1.0.0' },
+        serverInfo: { name: 'apex-agent', version: '1.6.0' },
         capabilities: { tools: {} }
       }
     });
-    if (!serverStarted) {
-      serverStarted = true;
-      setTimeout(startWsServer, 50);
-    }
     return;
   }
   

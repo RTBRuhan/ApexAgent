@@ -1,8 +1,8 @@
-# Chrome MCP
+# Apex Agent
 
 <div align="center">
 
-![Chrome MCP Logo](extension/icons/icon.svg)
+![Apex Agent Logo](extension/icons/icon.svg)
 
 **AI-Powered Browser Control & Debugging Extension**
 
@@ -63,8 +63,8 @@ AI-powered debugging capabilities:
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/RTBRuhan/ChromeMCP.git
-   cd ChromeMCP
+   git clone https://github.com/RTBRuhan/ApexAgent.git
+   cd ApexAgent
    ```
 
 2. **Load in Chrome/Edge:**
@@ -85,14 +85,14 @@ Add this to your AI tool's MCP settings (e.g., Cursor's `mcp.json`):
 
 ```json
 {
-  "chrome-mcp": {
+  "apex-agent": {
     "command": "node",
-    "args": ["/path/to/ChromeMCP/mcp-server/index.js"]
+    "args": ["/path/to/ApexAgent/mcp-server/index.js"]
   }
 }
 ```
 
-> ⚠️ Replace `/path/to/ChromeMCP` with your actual installation path
+> ⚠️ Replace `/path/to/ApexAgent` with your actual installation path
 
 ---
 
@@ -107,7 +107,7 @@ Add this to your AI tool's MCP settings (e.g., Cursor's `mcp.json`):
    ```
 
 2. **Connect Extension:**
-   - Click the Chrome MCP extension icon
+   - Click the Apex Agent extension icon
    - Go to **MCP** tab
    - Click **Connect**
 
@@ -175,7 +175,7 @@ Add this to your AI tool's MCP settings (e.g., Cursor's `mcp.json`):
 | Tool | Description |
 |------|-------------|
 | `list_extensions` | List all installed extensions |
-| `reload_extension` | Reload extension by ID (use "self" for Chrome MCP) |
+| `reload_extension` | Reload extension by ID (use "self" for Apex Agent) |
 | `get_extension_info` | Get detailed extension info |
 | `enable_extension` | Enable an extension |
 | `disable_extension` | Disable an extension |
@@ -187,7 +187,7 @@ Add this to your AI tool's MCP settings (e.g., Cursor's `mcp.json`):
 ## 📁 Project Structure
 
 ```
-ChromeMCP/
+ApexAgent/
 ├── extension/
 │   ├── manifest.json       # Extension manifest (MV3)
 │   ├── background.js       # Service worker
