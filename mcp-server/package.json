@@ -1,26 +1,43 @@
 {
-  "name": "chrome-debug-hand-mcp",
-  "version": "1.0.0",
-  "description": "MCP Server for Chrome Debug Hand - Connect AI tools to Chrome browser",
-  "main": "index.js",
+  "name": "apex-agent-mcp",
+  "version": "2.0.0",
+  "description": "MCP server that connects AI code editors to your real Chrome browser via the Apex Agent extension.",
   "type": "module",
+  "main": "index.js",
+  "bin": {
+    "apex-agent-mcp": "./index.js",
+    "apex-agent": "./bin/cli.js"
+  },
   "scripts": {
     "start": "node index.js",
-    "dev": "node --watch index.js"
+    "hub": "node lib/hub.js",
+    "test": "node --test test/"
   },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "index.js",
+    "lib/",
+    "bin/",
+    "README.md"
+  ],
   "keywords": [
     "mcp",
     "chrome",
-    "debug",
-    "ai",
+    "browser",
+    "automation",
+    "extension",
+    "devtools",
+    "model-context-protocol",
     "cursor",
-    "browser-automation"
+    "claude",
+    "codex"
   ],
-  "author": "",
   "license": "MIT",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.24.0",
-    "ws": "^8.16.0"
+    "@modelcontextprotocol/server": "^2.0.0",
+    "ws": "^8.18.0",
+    "zod": "^3.23.0"
   }
 }
-

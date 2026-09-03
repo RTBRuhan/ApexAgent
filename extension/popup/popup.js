@@ -1,913 +1,689 @@
-// Apex Agent - Popup Script
+/*
+  Popup controller.
 
-// State
-let isRecording = false;
-let isPaused = false;
-let recordingStartTime = null;
-let pausedDuration = 0;
-let pauseStartTime = null;
-let timerInterval = null;
-let mcpConnected = false;
-let currentFilter = 'all';
-let searchQuery = '';
-let allLogs = [];
+  Two rules shape this file. First, nothing that could have come from a page, a tool result, a
+  model, or storage is ever handed to innerHTML — every value goes in through textContent or an
+  attribute set by the DOM API. That is the exact sink that made the old chat sidebar dangerous,
+  and a popup that renders tab titles and tool arguments is squarely in range of the same class of
+  bug. Second, this window never asserts anything it has not been told: if the service worker does
+  not answer, the panel says so rather than showing a stale or optimistic "connected".
+*/
 
-// Elements
-const elements = {
-  // Status
-  statusIndicator: document.getElementById('statusIndicator'),
-  
-  // Tabs
-  tabs: document.querySelectorAll('.tab'),
-  tabContents: document.querySelectorAll('.tab-content'),
-  
-  // Record
-  recordBtn: document.getElementById('recordBtn'),
-  pauseBtn: document.getElementById('pauseBtn'),
-  recordTimer: document.getElementById('recordTimer'),
-  logContainer: document.getElementById('logContainer'),
-  logCount: document.getElementById('logCount'),
-  logSearch: document.getElementById('logSearch'),
-  filterBtns: document.querySelectorAll('.filter-btn'),
-  copyLogBtn: document.getElementById('copyLogBtn'),
-  clearLogBtn: document.getElementById('clearLogBtn'),
-  exportLogBtn: document.getElementById('exportLogBtn'),
-  
-  // Recording options
-  trackClicks: document.getElementById('trackClicks'),
-  trackKeyboard: document.getElementById('trackKeyboard'),
-  trackScroll: document.getElementById('trackScroll'),
-  trackDOMChanges: document.getElementById('trackDOMChanges'),
-  skipDynamic: document.getElementById('skipDynamic'),
-  dynamicThreshold: document.getElementById('dynamicThreshold'),
-  thresholdValue: document.getElementById('thresholdValue'),
-  
-  // Collapsibles
-  collapsibles: document.querySelectorAll('.collapsible'),
-  
-  // MCP
-  mcpIndicator: document.getElementById('mcpIndicator'),
-  mcpStatusText: document.getElementById('mcpStatusText'),
-  mcpPort: document.getElementById('mcpPort'),
-  mcpHost: document.getElementById('mcpHost'),
-  startMcpBtn: document.getElementById('startMcpBtn'),
-  copyConfigBtn: document.getElementById('copyConfigBtn'),
-  mcpConfigCode: document.getElementById('mcpConfigCode'),
-  
-  // Agent
-  agentEnabled: document.getElementById('agentEnabled'),
-  agentActivityLog: document.getElementById('agentActivityLog'),
-  allowMouse: document.getElementById('allowMouse'),
-  allowKeyboard: document.getElementById('allowKeyboard'),
-  allowNavigation: document.getElementById('allowNavigation'),
-  allowScripts: document.getElementById('allowScripts'),
-  allowScreenshot: document.getElementById('allowScreenshot'),
-  showCursor: document.getElementById('showCursor'),
-  highlightTarget: document.getElementById('highlightTarget'),
-  showTooltips: document.getElementById('showTooltips'),
-  
-  // Footer
-  shortcutsLink: document.getElementById('shortcutsLink'),
-  docsLink: document.getElementById('docsLink'),
-  
-  // Help
-  helpBtn: document.getElementById('helpBtn'),
-  openGuideBtn: document.getElementById('openGuideBtn'),
+import { EDITOR_TARGETS, findEditorTarget } from '../lib/editor-setup.js';
+import { POLICY_KEY, PERMISSION_KEYS, DEFAULT_POLICY, normalisePolicy } from '../lib/policy.js';
+import { describeState } from '../lib/connection-copy.js';
+
+const PAIRING_WINDOW_MS = 120000;
+const REFRESH_MS = 2000;
+const ACTIVITY_LIMIT = 8;
+const NOTICE_ID = 'sidebarRemoved';
+
+/*
+  Capability copy. Every line answers the same question — what stops working if this is off —
+  because that is the only thing a person can actually weigh. No tool names, no protocol words.
+*/
+const CAPABILITY_COPY = [
+  {
+    key: 'navigation',
+    label: 'Navigation',
+    say: 'Open pages, follow links, go back. Off: your assistant cannot move you between pages.'
+  },
+  {
+    key: 'input',
+    label: 'Clicking and typing',
+    say: 'Press buttons and fill in fields. Off: your assistant can read a page but not act on it.'
+  },
+  {
+    key: 'screenshots',
+    label: 'Screenshots',
+    say: 'Capture what a page looks like. Off: your assistant works from text only and cannot check layout.'
+  },
+  {
+    key: 'javascript',
+    label: 'Run JavaScript',
+    say: 'Run code your assistant writes inside the page. Off: expression and script tools fail. Leave off unless you need it.'
+  },
+  {
+    key: 'trustedInput',
+    label: 'Trusted input and deep inspection',
+    say: 'Uses Chrome’s built-in debugger, the same one DevTools uses, so clicks and keystrokes look real to the page and network and console history become readable. While it is attached Chrome shows a yellow bar at the top of the window reading that Apex Agent is debugging this browser. That bar is Chrome being honest with you, and it goes away when the work finishes. Off: clicks and typing are simulated, which some sites ignore, and network history is unavailable.'
+  },
+  {
+    key: 'readPage',
+    label: 'Read page data',
+    say: 'Read text, form values, and site storage on the page you are on. Off: your assistant is effectively blind and most tools return nothing.'
+  },
+  {
+    key: 'otherExtensions',
+    label: 'Other extensions',
+    say: 'List and reload your other extensions. Off: extension-development tools stop working. Ordinary web work is unaffected.'
+  },
+  {
+    key: 'extensionFiles',
+    label: 'Extension file access',
+    say: 'Read the source files of an unpacked extension you are developing. Off: source-reading tools fail. Ordinary web work is unaffected.'
+  }
+];
+
+/*
+  Failure phrasing for the activity log. Same principle as the connection states: the log is for a
+  person deciding whether to trust this thing, so it reports what happened, not an error constant.
+*/
+const OUTCOME_PHRASES = {
+  NOT_ALLOWED: 'not allowed',
+  NO_TAB: 'no tab chosen',
+  UNSUPPORTED_URL: 'page off limits',
+  NOT_FOUND: 'nothing matched',
+  AMBIGUOUS: 'too many matches',
+  STALE_REF: 'page had changed',
+  NODE_DETACHED: 'page had changed',
+  OCCLUDED: 'target covered',
+  NOT_INTERACTABLE: 'target inactive',
+  TIMEOUT: 'timed out',
+  CANCELLED: 'cancelled',
+  CDP_REQUIRED: 'needs trusted input',
+  CDP_DETACHED: 'debugger detached',
+  TAB_CRASHED: 'tab crashed',
+  BAD_PARAMS: 'bad request',
+  TOO_LARGE: 'result too big',
+  NO_EXTENSION: 'browser not attached',
+  NOT_PAIRED: 'not approved yet',
+  EXTENSION_BUSY: 'too busy',
+  INTERNAL: 'internal fault'
 };
 
-// Initialize
-async function init() {
-  setupTabs();
-  setupCollapsibles();
-  setupRecordControls();
-  setupFilters();
-  setupSearch();
-  setupMCPControls();
-  setupAgentControls();
-  setupKeyboardShortcuts();
-  setupFooterLinks();
-  setupSettingsPanel();
-  await loadSettings();
-  await checkMCPStatus();
-  await loadRecordingState();
+const dom = {};
+let currentTab = null;
+let pairingTicker = null;
+let permissionRows = new Map();
+/*
+  Signatures of the last thing rendered for the two lists. The panel re-reads state every couple of
+  seconds, and rebuilding a list that has not changed would move focus out of a button the user is
+  tabbing towards and make a screen reader re-announce identical text. Cheap comparison, no churn.
+*/
+const lastRender = { clients: null, activity: null, code: null };
+
+function grab(...ids) {
+  for (const id of ids) dom[id] = document.getElementById(id);
 }
 
-// Tab Navigation
-function setupTabs() {
-  elements.tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      const tabId = tab.dataset.tab;
-      
-      elements.tabs.forEach(t => t.classList.remove('active'));
-      elements.tabContents.forEach(c => c.classList.remove('active'));
-      
-      tab.classList.add('active');
-      document.getElementById(`${tabId}Tab`).classList.add('active');
-      
-      // Save active tab
-      chrome.storage.local.set({ activeTab: tabId });
-    });
-  });
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined && text !== null) node.textContent = String(text);
+  return node;
 }
 
-// Collapsible Sections
-function setupCollapsibles() {
-  elements.collapsibles.forEach(collapsible => {
-    const header = collapsible.querySelector('.collapsible-header');
-    header.addEventListener('click', () => {
-      collapsible.classList.toggle('collapsed');
-      saveCollapsibleStates();
-    });
-  });
+function clear(node) {
+  while (node.firstChild) node.removeChild(node.firstChild);
 }
 
-function saveCollapsibleStates() {
-  const states = {};
-  elements.collapsibles.forEach(c => {
-    states[c.id] = c.classList.contains('collapsed');
-  });
-  chrome.storage.local.set({ collapsibleStates: states });
+function show(node, visible) {
+  node.hidden = !visible;
 }
 
-function loadCollapsibleStates(states) {
-  if (!states) return;
-  Object.entries(states).forEach(([id, collapsed]) => {
-    const el = document.getElementById(id);
-    if (el) {
-      el.classList.toggle('collapsed', collapsed);
-    }
-  });
+/* Assigning textContent replaces the text node even when the string is identical, which inside an
+   aria-live region reads as a fresh announcement. So only write when the value really changed. */
+function setText(node, text) {
+  const next = text === undefined || text === null ? '' : String(text);
+  if (node.textContent !== next) node.textContent = next;
 }
 
-// Record Controls
-function setupRecordControls() {
-  elements.recordBtn.addEventListener('click', toggleRecording);
-  elements.pauseBtn.addEventListener('click', togglePause);
-  elements.copyLogBtn.addEventListener('click', copyLog);
-  elements.clearLogBtn.addEventListener('click', clearLog);
-  elements.exportLogBtn.addEventListener('click', exportLog);
-  
-  // Threshold slider
-  elements.dynamicThreshold.addEventListener('input', (e) => {
-    elements.thresholdValue.textContent = `${e.target.value}ms`;
-    saveSettings();
-  });
-  
-  // Options change
-  [elements.trackClicks, elements.trackKeyboard, elements.trackScroll, 
-   elements.trackDOMChanges, elements.skipDynamic].forEach(el => {
-    el.addEventListener('change', () => {
-      saveSettings();
-      updateRecordingOptions();
-    });
-  });
-}
+/* ---------- talking to the service worker ---------- */
 
-async function toggleRecording() {
-  if (isRecording) {
-    // Stop recording
-    isRecording = false;
-    isPaused = false;
-    stopTimer();
-    elements.recordBtn.classList.remove('recording', 'paused');
-    elements.recordBtn.querySelector('.record-text').textContent = 'Record';
-    elements.pauseBtn.disabled = true;
-    elements.statusIndicator.classList.remove('recording', 'paused');
-    elements.statusIndicator.querySelector('.status-text').textContent = 'Idle';
-    
-    await sendToActiveTab({ type: 'STOP_RECORDING' });
-  } else {
-    // Start recording
-    isRecording = true;
-    isPaused = false;
-    recordingStartTime = Date.now();
-    pausedDuration = 0;
-    startTimer();
-    elements.recordBtn.classList.add('recording');
-    elements.recordBtn.querySelector('.record-text').textContent = 'Stop';
-    elements.pauseBtn.disabled = false;
-    elements.statusIndicator.classList.add('recording');
-    elements.statusIndicator.querySelector('.status-text').textContent = 'Recording';
-    
-    await sendToActiveTab({
-      type: 'START_RECORDING',
-      options: getRecordingOptions()
-    });
-  }
-  
-  chrome.storage.local.set({ isRecording, isPaused, recordingStartTime, pausedDuration });
-}
-
-async function togglePause() {
-  if (!isRecording) return;
-  
-  isPaused = !isPaused;
-  
-  if (isPaused) {
-    pauseStartTime = Date.now();
-    elements.recordBtn.classList.remove('recording');
-    elements.recordBtn.classList.add('paused');
-    elements.recordBtn.querySelector('.record-text').textContent = 'Paused';
-    elements.pauseBtn.innerHTML = `
-      <svg viewBox="0 0 24 24" fill="currentColor">
-        <polygon points="5,3 19,12 5,21"/>
-      </svg>
-    `;
-    elements.statusIndicator.classList.remove('recording');
-    elements.statusIndicator.classList.add('paused');
-    elements.statusIndicator.querySelector('.status-text').textContent = 'Paused';
-    
-    await sendToActiveTab({ type: 'PAUSE_RECORDING' });
-  } else {
-    pausedDuration += Date.now() - pauseStartTime;
-    elements.recordBtn.classList.remove('paused');
-    elements.recordBtn.classList.add('recording');
-    elements.recordBtn.querySelector('.record-text').textContent = 'Stop';
-    elements.pauseBtn.innerHTML = `
-      <svg viewBox="0 0 24 24" fill="currentColor">
-        <rect x="6" y="4" width="4" height="16"/>
-        <rect x="14" y="4" width="4" height="16"/>
-      </svg>
-    `;
-    elements.statusIndicator.classList.remove('paused');
-    elements.statusIndicator.classList.add('recording');
-    elements.statusIndicator.querySelector('.status-text').textContent = 'Recording';
-    
-    await sendToActiveTab({ type: 'RESUME_RECORDING' });
-  }
-  
-  chrome.storage.local.set({ isPaused, pausedDuration });
-}
-
-async function updateRecordingOptions() {
-  if (isRecording && !isPaused) {
-    await sendToActiveTab({
-      type: 'UPDATE_OPTIONS',
-      options: getRecordingOptions()
-    });
-  }
-}
-
-function getRecordingOptions() {
-  return {
-    trackClicks: elements.trackClicks.checked,
-    trackKeyboard: elements.trackKeyboard.checked,
-    trackScroll: elements.trackScroll.checked,
-    trackDOMChanges: elements.trackDOMChanges.checked,
-    skipDynamic: elements.skipDynamic.checked,
-    dynamicThreshold: parseInt(elements.dynamicThreshold.value)
-  };
-}
-
-function startTimer() {
-  updateTimer();
-  timerInterval = setInterval(updateTimer, 1000);
-}
-
-function stopTimer() {
-  clearInterval(timerInterval);
-  elements.recordTimer.textContent = '00:00';
-}
-
-function updateTimer() {
-  if (!recordingStartTime) return;
-  
-  let elapsed = Math.floor((Date.now() - recordingStartTime - pausedDuration) / 1000);
-  if (isPaused && pauseStartTime) {
-    elapsed = Math.floor((pauseStartTime - recordingStartTime - pausedDuration) / 1000);
-  }
-  
-  const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
-  const seconds = (elapsed % 60).toString().padStart(2, '0');
-  elements.recordTimer.textContent = `${minutes}:${seconds}`;
-}
-
-async function loadRecordingState() {
-  const state = await chrome.storage.local.get([
-    'isRecording', 'isPaused', 'recordingStartTime', 'pausedDuration', 'recordLog', 'activeTab'
-  ]);
-  
-  // Default to MCP tab, or restore saved tab
-  const activeTab = state.activeTab || 'mcp';
-  const tab = document.querySelector(`.tab[data-tab="${activeTab}"]`);
-  if (tab && activeTab !== 'mcp') tab.click(); // Only click if not already default
-  
-  if (state.isRecording) {
-    isRecording = true;
-    isPaused = state.isPaused || false;
-    recordingStartTime = state.recordingStartTime;
-    pausedDuration = state.pausedDuration || 0;
-    
-    if (isPaused) {
-      pauseStartTime = Date.now();
-      elements.recordBtn.classList.add('paused');
-      elements.recordBtn.querySelector('.record-text').textContent = 'Paused';
-      elements.statusIndicator.classList.add('paused');
-      elements.statusIndicator.querySelector('.status-text').textContent = 'Paused';
-      elements.pauseBtn.innerHTML = `
-        <svg viewBox="0 0 24 24" fill="currentColor">
-          <polygon points="5,3 19,12 5,21"/>
-        </svg>
-      `;
-    } else {
-      elements.recordBtn.classList.add('recording');
-      elements.recordBtn.querySelector('.record-text').textContent = 'Stop';
-      elements.statusIndicator.classList.add('recording');
-      elements.statusIndicator.querySelector('.status-text').textContent = 'Recording';
-    }
-    elements.pauseBtn.disabled = false;
-    startTimer();
-  }
-  
-  if (state.recordLog && state.recordLog.length > 0) {
-    allLogs = state.recordLog;
-    renderFilteredLogs();
-  }
-}
-
-// Filters
-function setupFilters() {
-  elements.filterBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      elements.filterBtns.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentFilter = btn.dataset.filter;
-      renderFilteredLogs();
-    });
-  });
-}
-
-// Search
-function setupSearch() {
-  let debounceTimer;
-  elements.logSearch.addEventListener('input', (e) => {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-      searchQuery = e.target.value.toLowerCase();
-      renderFilteredLogs();
-    }, 150);
-  });
-}
-
-function renderFilteredLogs() {
-  let filtered = allLogs;
-  
-  // Apply type filter
-  if (currentFilter !== 'all') {
-    filtered = filtered.filter(log => log.type.toLowerCase() === currentFilter);
-  }
-  
-  // Apply search
-  if (searchQuery) {
-    filtered = filtered.filter(log => 
-      log.details.toLowerCase().includes(searchQuery) ||
-      log.type.toLowerCase().includes(searchQuery)
-    );
-  }
-  
-  // Update count
-  elements.logCount.textContent = `${filtered.length} ${filtered.length === 1 ? 'entry' : 'entries'}`;
-  
-  // Render
-  if (filtered.length === 0) {
-    if (allLogs.length === 0) {
-      clearLogDisplay();
-    } else {
-      elements.logContainer.innerHTML = `
-        <div class="log-empty">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <circle cx="11" cy="11" r="8"/>
-            <path d="M21 21L16.65 16.65"/>
-          </svg>
-          <p>No matching entries</p>
-        </div>
-      `;
-    }
-  } else {
-    elements.logContainer.innerHTML = '';
-    filtered.forEach(entry => addLogEntryElement(entry));
-  }
-}
-
-function clearLogDisplay() {
-  elements.logContainer.innerHTML = `
-    <div class="log-empty">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-        <circle cx="12" cy="12" r="10"/>
-        <path d="M12 8V12L14 14"/>
-      </svg>
-      <p>Start recording to capture interactions</p>
-    </div>
-  `;
-  elements.logCount.textContent = '0 entries';
-}
-
-function addLogEntryElement(entry) {
-  const emptyState = elements.logContainer.querySelector('.log-empty');
-  if (emptyState) emptyState.remove();
-  
-  const div = document.createElement('div');
-  div.className = 'log-entry';
-  div.dataset.type = entry.type.toLowerCase();
-  
-  const typeClass = entry.type.toLowerCase();
-  const time = formatTime(entry.timestamp);
-  
-  let changeHtml = '';
-  if (entry.before !== undefined && entry.after !== undefined) {
-    changeHtml = `
-      <div class="log-change">
-        <div class="log-change-before">- ${escapeHtml(truncate(String(entry.before), 80))}</div>
-        <div class="log-change-after">+ ${escapeHtml(truncate(String(entry.after), 80))}</div>
-      </div>
-    `;
-  }
-  
-  div.innerHTML = `
-    <div class="log-entry-header">
-      <span class="log-type ${typeClass}">${entry.type}</span>
-      <span class="log-time">${time}</span>
-    </div>
-    <div class="log-details">${escapeHtml(entry.details)}</div>
-    ${changeHtml}
-  `;
-  
-  elements.logContainer.appendChild(div);
-  elements.logContainer.scrollTop = elements.logContainer.scrollHeight;
-}
-
-function addLogEntry(entry) {
-  allLogs.push(entry);
-  
-  // Keep max 500 entries
-  if (allLogs.length > 500) {
-    allLogs = allLogs.slice(-500);
-  }
-  
-  // Only add to DOM if matches current filter
-  const matchesFilter = currentFilter === 'all' || entry.type.toLowerCase() === currentFilter;
-  const matchesSearch = !searchQuery || 
-    entry.details.toLowerCase().includes(searchQuery) ||
-    entry.type.toLowerCase().includes(searchQuery);
-  
-  if (matchesFilter && matchesSearch) {
-    addLogEntryElement(entry);
-  }
-  
-  // Update count
-  const visibleCount = elements.logContainer.querySelectorAll('.log-entry').length;
-  elements.logCount.textContent = `${visibleCount} ${visibleCount === 1 ? 'entry' : 'entries'}`;
-}
-
-function formatTime(timestamp) {
-  const date = new Date(timestamp);
-  return date.toLocaleTimeString('en-US', { 
-    hour12: false, 
-    hour: '2-digit', 
-    minute: '2-digit', 
-    second: '2-digit' 
-  });
-}
-
-function escapeHtml(str) {
-  if (typeof str !== 'string') str = String(str);
-  return str.replace(/[&<>"']/g, char => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  }[char]));
-}
-
-function truncate(str, maxLen) {
-  if (typeof str !== 'string') str = String(str);
-  return str.length > maxLen ? str.slice(0, maxLen) + '…' : str;
-}
-
-async function copyLog() {
-  if (allLogs.length === 0) {
-    showToast('No log to copy', 'error');
-    return;
-  }
-  
-  // Format for clipboard
-  const formatted = allLogs.map(entry => {
-    let line = `[${formatTime(entry.timestamp)}] ${entry.type}: ${entry.details}`;
-    if (entry.before !== undefined && entry.after !== undefined) {
-      line += `\n  - Before: ${entry.before}\n  + After: ${entry.after}`;
-    }
-    return line;
-  }).join('\n\n');
-  
-  await navigator.clipboard.writeText(formatted);
-  showToast('Copied to clipboard');
-}
-
-async function clearLog() {
-  allLogs = [];
-  await chrome.storage.local.set({ recordLog: [] });
-  clearLogDisplay();
-  showToast('Log cleared');
-}
-
-async function exportLog() {
-  if (allLogs.length === 0) {
-    showToast('No log to export', 'error');
-    return;
-  }
-  
-  const blob = new Blob([JSON.stringify(allLogs, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `apex-agent-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-  showToast('Exported successfully');
-}
-
-// MCP Controls
-function setupMCPControls() {
-  elements.startMcpBtn.addEventListener('click', toggleMCPServer);
-  elements.copyConfigBtn.addEventListener('click', copyMCPConfig);
-  elements.mcpPort.addEventListener('change', updateMCPConfig);
-  elements.mcpHost.addEventListener('change', updateMCPConfig);
-}
-
-async function checkMCPStatus() {
+/*
+  A rejected sendMessage means the worker is gone or threw before replying, which is a different
+  situation from any connection state the worker could report — so it maps to its own state rather
+  than being folded into "not running". Returning null here is what makes that distinction
+  possible upstream.
+*/
+async function send(type, fields = {}) {
   try {
-    const response = await chrome.runtime.sendMessage({ type: 'GET_MCP_STATUS' });
-    updateMCPUI(response?.connected || false);
-  } catch (e) {
-    updateMCPUI(false);
+    const reply = await chrome.runtime.sendMessage({ type, ...fields });
+    return reply === undefined ? null : reply;
+  } catch (error) {
+    console.warn('[apex] popup message failed', type, error);
+    return null;
   }
 }
 
-function updateMCPUI(connected) {
-  mcpConnected = connected;
-  
-  if (connected) {
-    elements.mcpIndicator.classList.add('connected');
-    elements.mcpStatusText.textContent = `Connected (${elements.mcpHost.value}:${elements.mcpPort.value})`;
-    elements.startMcpBtn.textContent = 'Disconnect';
-    elements.startMcpBtn.classList.add('active');
-    elements.statusIndicator.classList.add('connected');
-    if (!isRecording) {
-      elements.statusIndicator.querySelector('.status-text').textContent = 'Connected';
+/* ---------- status ---------- */
+
+function renderStatus(state) {
+  const view = describeState(state);
+
+  dom.statusBlock.dataset.state = view.key;
+  setText(dom.stateWord, view.word);
+  setText(dom.stateSay, view.say);
+
+  if (view.command) {
+    if (dom.stateExtra.dataset.command !== view.command) {
+      clear(dom.stateExtra);
+      dom.stateExtra.append(el('code', null, view.command));
+      dom.stateExtra.dataset.command = view.command;
     }
+    show(dom.stateExtra, true);
   } else {
-    elements.mcpIndicator.classList.remove('connected');
-    elements.mcpStatusText.textContent = 'Not Connected';
-    elements.startMcpBtn.innerHTML = `
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polygon points="5,3 19,12 5,21"/>
-      </svg>
-      Connect
-    `;
-    elements.startMcpBtn.classList.remove('active');
-    if (!isRecording) {
-      elements.statusIndicator.classList.remove('connected');
-      elements.statusIndicator.querySelector('.status-text').textContent = 'Idle';
-    }
+    show(dom.stateExtra, false);
+  }
+
+  show(dom.reconnectBtn, view.offerReconnect);
+  show(dom.openExtensionsBtn, view.offerExtensionsPage);
+
+  const detail = typeof state.detail === 'string' ? state.detail.trim() : '';
+  setText(dom.stateDetail, detail);
+  show(dom.stateTech, detail.length > 0);
+  if (!detail) dom.stateTech.open = false;
+}
+
+/* ---------- pairing ---------- */
+
+function renderPairing(state) {
+  const pairing = state.pairing;
+  const code = pairing && typeof pairing.code === 'string' ? pairing.code : '';
+
+  if (!code) {
+    show(dom.pairingBlock, false);
+    lastRender.code = null;
+    stopPairingTicker();
+    return;
+  }
+
+  show(dom.pairingBlock, true);
+
+  if (lastRender.code !== code) {
+    lastRender.code = code;
+    show(dom.pairError, false);
+
+    clear(dom.pairCode);
+    const spoken = el('span', 'sr-only', [...code].join(' '));
+    dom.pairCode.append(spoken);
+    [...code].forEach((digit, index) => {
+      if (index === 3) dom.pairCode.append(el('span', 'pair-gap'));
+      const cell = el('span', 'pair-digit', digit);
+      cell.setAttribute('aria-hidden', 'true');
+      dom.pairCode.append(cell);
+    });
+
+    dom.approveBtn.disabled = false;
+    dom.rejectBtn.disabled = false;
+    dom.approveBtn.dataset.code = code;
+    dom.rejectBtn.dataset.code = code;
+
+    startPairingTicker(pairing.expiresAt);
   }
 }
 
-async function toggleMCPServer() {
-  if (mcpConnected) {
-    await chrome.runtime.sendMessage({ type: 'STOP_MCP_SERVER' });
-    updateMCPUI(false);
-    showToast('Disconnected');
+/*
+  The countdown is derived from an absolute expiry timestamp rather than the "expiresInMs" the hub
+  puts on the wire, because the popup may be opened a minute after the frame arrived and a relative
+  number would restart the clock at 120 seconds every time this window opens.
+*/
+function startPairingTicker(expiresAt) {
+  stopPairingTicker();
+  const tick = () => {
+    const remaining = Number.isFinite(expiresAt) ? expiresAt - Date.now() : PAIRING_WINDOW_MS;
+    const clamped = Math.max(0, remaining);
+    const fraction = Math.max(0, Math.min(1, clamped / PAIRING_WINDOW_MS));
+    dom.expiryFill.style.width = `${(fraction * 100).toFixed(1)}%`;
+
+    if (clamped <= 0) {
+      dom.expiryText.textContent = 'This code has expired. Restart your editor for a new one.';
+      dom.approveBtn.disabled = true;
+      stopPairingTicker();
+      return;
+    }
+    const seconds = Math.ceil(clamped / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const rest = String(seconds % 60).padStart(2, '0');
+    dom.expiryText.textContent = `Expires in ${minutes}:${rest}`;
+  };
+  tick();
+  pairingTicker = setInterval(tick, 1000);
+}
+
+function stopPairingTicker() {
+  if (pairingTicker) {
+    clearInterval(pairingTicker);
+    pairingTicker = null;
+  }
+}
+
+async function decidePairing(approve) {
+  const button = approve ? dom.approveBtn : dom.rejectBtn;
+  const code = button.dataset.code || '';
+  dom.approveBtn.disabled = true;
+  dom.rejectBtn.disabled = true;
+
+  const reply = await send(approve ? 'apex:approvePairing' : 'apex:rejectPairing', { code });
+
+  if (!reply || reply.ok !== true) {
+    const message = reply && reply.error && typeof reply.error.message === 'string'
+      ? reply.error.message
+      : 'That did not go through. Restart your editor to get a new code.';
+    dom.pairError.textContent = message;
+    show(dom.pairError, true);
+    dom.rejectBtn.disabled = false;
+  }
+
+  await refresh();
+}
+
+/* ---------- attached editors ---------- */
+
+function tabLabel(client) {
+  if (client.tabTitle) return client.tabTitle;
+  if (client.tabUrl) return client.tabUrl;
+  if (Number.isFinite(client.tabId)) return `tab ${client.tabId}`;
+  return 'no tab chosen — it will use whichever tab is in front';
+}
+
+function renderClients(state) {
+  const clients = Array.isArray(state.clients) ? state.clients : [];
+  const signature = JSON.stringify([clients, currentTab && currentTab.id]);
+  if (lastRender.clients === signature) return;
+  lastRender.clients = signature;
+
+  clear(dom.clientList);
+
+  setText(dom.clientCount, clients.length ? String(clients.length) : '');
+  show(dom.clientEmpty, clients.length === 0);
+
+  for (const client of clients) {
+    const row = el('li', 'client');
+    const identity = el('div', 'client-id');
+
+    const name = el('p', 'client-name', client.name || client.clientId || 'Unnamed editor');
+    if (client.version) name.title = `${client.name || 'editor'} ${client.version}`;
+    identity.append(name);
+
+    const target = el('p', 'client-tab', tabLabel(client));
+    target.title = client.tabUrl || '';
+    identity.append(target);
+    row.append(identity);
+
+    /*
+      "Use this tab" is the concrete answer to "which tab will they act on". It is offered only
+      when it would change something, and never for pages extensions are not allowed to touch,
+      because a button whose only outcome is a refusal is worse than no button.
+    */
+    const targetable = currentTab && Number.isFinite(currentTab.id) && isTargetable(currentTab.url);
+    if (targetable && client.tabId !== currentTab.id) {
+      const pick = el('button', 'btn btn-tiny', 'Use this tab');
+      pick.type = 'button';
+      pick.addEventListener('click', async () => {
+        pick.disabled = true;
+        await send('apex:selectTab', { clientId: client.clientId, tabId: currentTab.id });
+        await refresh();
+      });
+      row.append(pick);
+    } else if (currentTab && client.tabId === currentTab.id) {
+      row.append(el('span', 'client-here', 'this tab'));
+    }
+
+    dom.clientList.append(row);
+  }
+}
+
+function isTargetable(url) {
+  if (typeof url !== 'string' || url === '') return false;
+  return /^(https?|file|about:blank)/.test(url) &&
+    !url.startsWith('https://chromewebstore.google.com') &&
+    !url.startsWith('https://chrome.google.com/webstore');
+}
+
+/* ---------- capabilities ---------- */
+
+function buildPermissionRows() {
+  clear(dom.permList);
+  permissionRows = new Map();
+
+  /*
+    Iterating the shared key list rather than the copy list means a capability added to the policy
+    can never quietly go unrendered — it shows up here with its raw key, which is ugly enough that
+    it gets noticed and given real copy.
+  */
+  for (const key of PERMISSION_KEYS) {
+    const copy = CAPABILITY_COPY.find((entry) => entry.key === key) ||
+      { key, label: key, say: 'No description yet.' };
+
+    const row = el('li', 'perm');
+    const text = el('div', 'perm-text');
+
+    const label = el('label', 'perm-label', copy.label);
+    label.htmlFor = `perm-${key}`;
+    text.append(label);
+
+    const say = el('p', 'perm-say', copy.say);
+    say.id = `perm-${key}-say`;
+    text.append(say);
+    row.append(text);
+
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.className = 'switch';
+    box.id = `perm-${key}`;
+    box.setAttribute('role', 'switch');
+    box.setAttribute('aria-describedby', say.id);
+    box.addEventListener('change', () => setPermission(key, box.checked));
+    row.append(box);
+
+    dom.permList.append(row);
+    permissionRows.set(key, box);
+  }
+}
+
+function renderPolicy(policy) {
+  dom.masterSwitch.checked = policy.enabled;
+  for (const [key, box] of permissionRows) {
+    box.checked = policy.permissions[key] === true;
+  }
+
+  const allowed = PERMISSION_KEYS.filter((key) => policy.permissions[key] === true).length;
+  setText(
+    dom.permSummary,
+    policy.enabled ? `${allowed} of ${PERMISSION_KEYS.length} allowed` : 'paused'
+  );
+  setText(
+    dom.masterSay,
+    policy.enabled
+      ? 'Turn this off to refuse everything without disconnecting.'
+      : 'Every request is being refused. Editors stay connected and will be told they were refused.'
+  );
+  show(dom.pausedNote, !policy.enabled);
+}
+
+/*
+  The popup is the only writer of the policy, so a write is a read-modify-write of the whole
+  object. The message afterwards is not the mechanism — storage is — it exists so the worker drops
+  any cached copy immediately rather than acting on a stale one for the next few milliseconds.
+*/
+async function writePolicy(mutate) {
+  const stored = await chrome.storage.local.get(POLICY_KEY);
+  const policy = normalisePolicy(stored[POLICY_KEY]);
+  mutate(policy);
+  policy.updatedAt = Date.now();
+  await chrome.storage.local.set({ [POLICY_KEY]: policy });
+  renderPolicy(policy);
+  return policy;
+}
+
+async function setPermission(key, value) {
+  const policy = await writePolicy((draft) => {
+    draft.permissions[key] = value === true;
+  });
+  const reply = await send('apex:setPermission', { key, value: value === true });
+  /*
+    If the worker reports a different effective policy than we just wrote, it wins: it is the one
+    enforcing, and showing the user a switch that does not match what is enforced is precisely the
+    failure this rewrite exists to remove.
+  */
+  if (reply && reply.permissions) {
+    renderPolicy(normalisePolicy({ enabled: reply.agentEnabled, permissions: reply.permissions }));
   } else {
-    const port = parseInt(elements.mcpPort.value);
-    const host = elements.mcpHost.value;
-    
-    elements.startMcpBtn.textContent = 'Connecting...';
-    elements.startMcpBtn.disabled = true;
-    
-    const response = await chrome.runtime.sendMessage({ 
-      type: 'START_MCP_SERVER',
-      port,
-      host
-    });
-    
-    elements.startMcpBtn.disabled = false;
-    
-    if (response?.success) {
-      updateMCPUI(true);
-      showToast('Connected successfully');
-    } else {
-      updateMCPUI(false);
-      showToast(response?.error || 'Connection failed', 'error');
-    }
+    renderPolicy(policy);
   }
 }
 
-function updateMCPConfig() {
-  const port = elements.mcpPort.value;
-  const config = {
-    "apex-agent": {
-      command: "node",
-      args: ["/path/to/ApexAgent/mcp-server/index.js"],
-      env: { PORT: port }
-    }
-  };
-  elements.mcpConfigCode.textContent = JSON.stringify(config, null, 2);
-  saveSettings();
-}
-
-async function copyMCPConfig() {
-  await navigator.clipboard.writeText(elements.mcpConfigCode.textContent);
-  showToast('Config copied');
-}
-
-// Agent Controls
-function setupAgentControls() {
-  elements.agentEnabled.addEventListener('change', toggleAgent);
-  
-  [elements.allowMouse, elements.allowKeyboard, elements.allowNavigation,
-   elements.allowScripts, elements.allowScreenshot, elements.showCursor,
-   elements.highlightTarget, elements.showTooltips].forEach(el => {
-    el.addEventListener('change', () => {
-      saveSettings();
-      updateAgentPermissions();
-    });
+async function setMaster(value) {
+  const policy = await writePolicy((draft) => {
+    draft.enabled = value === true;
   });
-}
-
-async function toggleAgent() {
-  const enabled = elements.agentEnabled.checked;
-  
-  await chrome.runtime.sendMessage({
-    type: 'SET_AGENT_ENABLED',
-    enabled,
-    permissions: getAgentPermissions()
-  });
-  
-  showToast(enabled ? 'Agent enabled' : 'Agent disabled');
-  saveSettings();
-}
-
-async function updateAgentPermissions() {
-  if (elements.agentEnabled.checked) {
-    await chrome.runtime.sendMessage({
-      type: 'SET_AGENT_ENABLED',
-      enabled: true,
-      permissions: getAgentPermissions()
-    });
+  const reply = await send('apex:setPermission', { key: 'enabled', value: value === true });
+  if (reply && reply.permissions) {
+    renderPolicy(normalisePolicy({ enabled: reply.agentEnabled, permissions: reply.permissions }));
+  } else {
+    renderPolicy(policy);
   }
 }
 
-function getAgentPermissions() {
-  return {
-    mouse: elements.allowMouse.checked,
-    keyboard: elements.allowKeyboard.checked,
-    navigation: elements.allowNavigation.checked,
-    scripts: elements.allowScripts.checked,
-    screenshot: elements.allowScreenshot.checked,
-    showCursor: elements.showCursor.checked,
-    highlightTarget: elements.highlightTarget.checked,
-    showTooltips: elements.showTooltips.checked
-  };
+/* ---------- activity ---------- */
+
+function outcomeWords(entry) {
+  if (entry.ok === true) return 'done';
+  const phrase = OUTCOME_PHRASES[entry.code];
+  return phrase ? phrase : 'failed';
 }
 
-function addAgentActivity(action) {
-  const emptyState = elements.agentActivityLog.querySelector('.activity-empty');
-  if (emptyState) emptyState.remove();
-  
-  const div = document.createElement('div');
-  div.className = 'log-entry';
-  div.innerHTML = `
-    <div class="log-entry-header">
-      <span class="log-type">${action.type}</span>
-      <span class="log-time">${formatTime(Date.now())}</span>
-    </div>
-    <div class="log-details">${escapeHtml(action.details)}</div>
-  `;
-  
-  elements.agentActivityLog.appendChild(div);
-  elements.agentActivityLog.scrollTop = elements.agentActivityLog.scrollHeight;
-  
-  // Keep max 50 entries
-  const entries = elements.agentActivityLog.querySelectorAll('.log-entry');
-  if (entries.length > 50) {
-    entries[0].remove();
+function clockTime(ts) {
+  if (!Number.isFinite(ts)) return '';
+  return new Date(ts).toLocaleTimeString([], { hour12: false });
+}
+
+function renderActivity(entries) {
+  const list = Array.isArray(entries) ? entries.slice(0, ACTIVITY_LIMIT) : [];
+  const signature = JSON.stringify(list);
+  if (lastRender.activity === signature) return;
+  lastRender.activity = signature;
+
+  clear(dom.activityList);
+
+  show(dom.activityEmpty, list.length === 0);
+  setText(
+    dom.activitySummary,
+    list.length ? `${list[0].tool || 'request'} · ${outcomeWords(list[0])}` : 'nothing yet'
+  );
+
+  for (const entry of list) {
+    const row = el('li', 'activity');
+    row.dataset.ok = String(entry.ok === true);
+
+    row.append(el('p', 'activity-tool', entry.tool || 'request'));
+    row.append(el('p', 'activity-outcome', outcomeWords(entry)));
+
+    const where = [entry.clientName, entry.tabTitle || (Number.isFinite(entry.tabId) ? `tab ${entry.tabId}` : null)]
+      .filter(Boolean)
+      .join(' → ');
+    const whereNode = el('p', 'activity-where', where || 'this browser');
+    whereNode.title = entry.tabUrl || '';
+    row.append(whereNode);
+
+    row.append(el('p', 'activity-when', clockTime(entry.ts)));
+    dom.activityList.append(row);
   }
 }
 
-// Keyboard Shortcuts
-function setupKeyboardShortcuts() {
-  document.addEventListener('keydown', (e) => {
-    // Ctrl/Cmd + R: Toggle recording
-    if ((e.ctrlKey || e.metaKey) && e.key === 'r') {
-      e.preventDefault();
-      toggleRecording();
-    }
-    // Ctrl/Cmd + P: Toggle pause
-    if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
-      e.preventDefault();
-      if (isRecording) togglePause();
-    }
-    // Ctrl/Cmd + C: Copy log (when not in input)
-    if ((e.ctrlKey || e.metaKey) && e.key === 'c' && document.activeElement.tagName !== 'INPUT') {
-      // Let default copy work, but if no selection, copy log
-      if (!window.getSelection().toString()) {
-        e.preventDefault();
-        copyLog();
-      }
-    }
-    // Escape: Clear search
-    if (e.key === 'Escape' && document.activeElement === elements.logSearch) {
-      elements.logSearch.value = '';
-      searchQuery = '';
-      renderFilteredLogs();
-    }
+/* ---------- editor setup ---------- */
+
+function buildEditorPicker(selectedId) {
+  clear(dom.editorOptions);
+  for (const target of EDITOR_TARGETS) {
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = 'editor';
+    input.id = `editor-${target.id}`;
+    input.value = target.id;
+    input.checked = target.id === selectedId;
+    input.addEventListener('change', () => {
+      renderEditorTarget(target.id);
+      chrome.storage.local.set({ apexSetupEditor: target.id });
+    });
+
+    const label = el('label', null, target.label);
+    label.htmlFor = input.id;
+
+    dom.editorOptions.append(input, label);
+  }
+}
+
+function renderEditorTarget(id) {
+  const target = findEditorTarget(id);
+  dom.setupPath.textContent = target.path;
+  dom.setupNote.textContent = target.note;
+  dom.setupSnippet.textContent = target.snippet;
+  dom.setupSnippet.setAttribute('aria-label', `${target.label} configuration, ${target.language}`);
+  dom.copyBtn.dataset.editor = target.id;
+  dom.copyStatus.textContent = '';
+}
+
+async function copySnippet() {
+  const text = dom.setupSnippet.textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+    dom.copyStatus.textContent = 'Copied';
+  } catch {
+    dom.copyStatus.textContent = 'Could not copy — select the text and press Ctrl+C';
+  }
+  setTimeout(() => {
+    dom.copyStatus.textContent = '';
+  }, 2500);
+}
+
+/* ---------- the one-time notice ---------- */
+
+async function renderNotice() {
+  const stored = await chrome.storage.local.get(['apexMigrations', 'apexNotices']);
+  const log = stored.apexMigrations && Array.isArray(stored.apexMigrations.log)
+    ? stored.apexMigrations.log
+    : [];
+  const entry = log.find((item) => item && item.id === '2.0.0-retire-sidebar');
+  const dismissed = Boolean(
+    stored.apexNotices && stored.apexNotices[NOTICE_ID] && stored.apexNotices[NOTICE_ID].dismissedAt
+  );
+
+  const deleted = entry && Array.isArray(entry.deletedKeys) ? entry.deletedKeys : [];
+  if (dismissed || deleted.length === 0) {
+    show(dom.notice, false);
+    return;
+  }
+
+  const parts = ['Apex Agent’s built-in chat panel has been removed — your editor does that job better, and the panel had a security flaw in how it displayed replies.'];
+  if (entry.hadCredential) {
+    parts.push('The API key you had saved in it was deleted at the same time, so nothing is left behind that could leak. You will need to keep it wherever you got it from if you still want it.');
+  } else {
+    parts.push('The settings it had saved were deleted at the same time.');
+  }
+  parts.push('Apex Agent now works only through your code editor.');
+
+  dom.noticeBody.textContent = parts.join(' ');
+  show(dom.notice, true);
+}
+
+async function dismissNotice() {
+  const stored = await chrome.storage.local.get('apexNotices');
+  const notices = stored.apexNotices && typeof stored.apexNotices === 'object' ? stored.apexNotices : {};
+  notices[NOTICE_ID] = { dismissedAt: Date.now() };
+  await chrome.storage.local.set({ apexNotices: notices });
+  show(dom.notice, false);
+  send('apex:dismissNotice', { id: NOTICE_ID });
+}
+
+/*
+  Enforcement denies anything that is not explicitly true, so an install where the policy key was
+  never written would refuse every request and show eight switches in the off position with no
+  explanation. The service worker's migration seeds the defaults, but the popup is the only writer
+  of this key and it costs one read to make the panel correct even if that migration was never
+  wired up. Writes only when the key is genuinely absent, so a user who switched everything off
+  does not find it switched back on.
+*/
+async function ensurePolicySeeded() {
+  const stored = await chrome.storage.local.get(POLICY_KEY);
+  if (stored[POLICY_KEY] && typeof stored[POLICY_KEY] === 'object') return;
+  await chrome.storage.local.set({
+    [POLICY_KEY]: normalisePolicy({ ...DEFAULT_POLICY, updatedAt: Date.now() })
   });
 }
 
-// Footer Links
-function setupFooterLinks() {
-  elements.shortcutsLink.addEventListener('click', (e) => {
-    e.preventDefault();
-    showToast('Ctrl+R: Record | Ctrl+P: Pause | Esc: Clear search');
+/* ---------- refresh cycle ---------- */
+
+async function refresh() {
+  const reply = await send('apex:getState');
+  const state = reply && typeof reply === 'object' ? reply : { status: 'unavailable' };
+
+  renderStatus(state);
+  renderPairing(state);
+  renderClients(state);
+
+  /*
+    Permission state is read from storage rather than trusted from the reply, because storage is
+    what the worker enforces against. If the two ever disagree the switches must show the enforced
+    value.
+  */
+  const stored = await chrome.storage.local.get(POLICY_KEY);
+  renderPolicy(normalisePolicy(stored[POLICY_KEY]));
+
+  const activity = await send('apex:getActivityLog', { limit: ACTIVITY_LIMIT });
+  renderActivity(activity && Array.isArray(activity.entries) ? activity.entries : []);
+
+  /*
+    Setup instructions open themselves exactly when they are the next thing to do. Once connected
+    they stay folded away, which is what keeps the healthy view inside one screen.
+  */
+  if (state.status === 'not_running' && !dom.setupBlock.dataset.userSet) {
+    dom.setupBlock.open = true;
+  }
+}
+
+/* ---------- wiring ---------- */
+
+async function init() {
+  grab(
+    'buildVersion', 'notice', 'noticeBody', 'noticeDismiss',
+    'statusBlock', 'stateWord', 'stateSay', 'stateExtra', 'stateTech', 'stateDetail',
+    'reconnectBtn', 'openExtensionsBtn',
+    'pairingBlock', 'pairCode', 'expiryFill', 'expiryText', 'approveBtn', 'rejectBtn', 'pairError',
+    'clientList', 'clientCount', 'clientEmpty',
+    'masterSwitch', 'masterSay', 'permBlock', 'permSummary', 'permList', 'pausedNote',
+    'activityBlock', 'activitySummary', 'activityList', 'activityEmpty',
+    'setupBlock', 'editorOptions', 'setupPath', 'setupNote', 'setupSnippet', 'copyBtn', 'copyStatus',
+    'guideBtn'
+  );
+
+  dom.buildVersion.textContent = `v${chrome.runtime.getManifest().version}`;
+
+  buildPermissionRows();
+  dom.masterSwitch.addEventListener('change', () => setMaster(dom.masterSwitch.checked));
+
+  dom.approveBtn.addEventListener('click', () => decidePairing(true));
+  dom.rejectBtn.addEventListener('click', () => decidePairing(false));
+
+  /* Optimistic wording only — the real state still comes from the worker on the next refresh. */
+  dom.reconnectBtn.addEventListener('click', async () => {
+    dom.reconnectBtn.disabled = true;
+    setText(dom.stateSay, 'Trying to reach the server again.');
+    await send('apex:reconnect');
+    dom.reconnectBtn.disabled = false;
+    await refresh();
   });
-  
-  elements.docsLink.addEventListener('click', (e) => {
-    e.preventDefault();
-    chrome.tabs.create({ url: 'https://github.com/RTBRuhan/ApexAgent#readme' });
+
+  dom.openExtensionsBtn.addEventListener('click', () => {
+    chrome.tabs.create({ url: 'chrome://extensions/?id=' + chrome.runtime.id });
   });
-  
-  // Help button - opens getting started guide
-  elements.helpBtn.addEventListener('click', () => {
+
+  dom.noticeDismiss.addEventListener('click', dismissNotice);
+  dom.copyBtn.addEventListener('click', copySnippet);
+  dom.guideBtn.addEventListener('click', () => {
     chrome.tabs.create({ url: chrome.runtime.getURL('getting-started.html') });
   });
-  
-  // Open guide button in MCP tab
-  elements.openGuideBtn.addEventListener('click', () => {
-    chrome.tabs.create({ url: chrome.runtime.getURL('getting-started.html') });
-  });
-}
 
-// Settings Panel
-function setupSettingsPanel() {
-  const settingsBtn = document.getElementById('settingsBtn');
-  const settingsPanel = document.getElementById('settingsPanel');
-  const closeSettingsBtn = document.getElementById('closeSettingsBtn');
-  const enableAiAssistant = document.getElementById('enableAiAssistant');
-  const aiSettings = document.getElementById('aiSettings');
-  const openAiSidebarBtn = document.getElementById('openAiSidebarBtn');
-  const popupAiProvider = document.getElementById('popupAiProvider');
-  const popupApiKey = document.getElementById('popupApiKey');
-  const saveAiSettingsBtn = document.getElementById('saveAiSettingsBtn');
-  
-  // Toggle settings panel
-  settingsBtn.addEventListener('click', () => {
-    settingsPanel.classList.toggle('hidden');
-  });
-  
-  closeSettingsBtn.addEventListener('click', () => {
-    settingsPanel.classList.add('hidden');
-  });
-  
-  // Load AI settings
-  chrome.storage.local.get(['aiEnabled', 'aiProvider', 'aiApiKey'], (data) => {
-    enableAiAssistant.checked = data.aiEnabled || false;
-    popupAiProvider.value = data.aiProvider || 'openai';
-    popupApiKey.value = data.aiApiKey || '';
-    
-    // Show/hide AI settings and button
-    if (data.aiEnabled) {
-      aiSettings.classList.remove('hidden');
-      openAiSidebarBtn.classList.remove('hidden');
-    }
-  });
-  
-  // Enable/disable AI assistant
-  enableAiAssistant.addEventListener('change', () => {
-    const enabled = enableAiAssistant.checked;
-    chrome.storage.local.set({ aiEnabled: enabled });
-    
-    if (enabled) {
-      aiSettings.classList.remove('hidden');
-      openAiSidebarBtn.classList.remove('hidden');
-    } else {
-      aiSettings.classList.add('hidden');
-      openAiSidebarBtn.classList.add('hidden');
-    }
-  });
-  
-  // Save AI settings
-  saveAiSettingsBtn.addEventListener('click', async () => {
-    await chrome.storage.local.set({
-      aiProvider: popupAiProvider.value,
-      aiApiKey: popupApiKey.value
+  /* Remember that the user chose to fold a section, so refresh() stops reopening it at them. */
+  for (const block of [dom.setupBlock, dom.permBlock, dom.activityBlock]) {
+    block.addEventListener('toggle', () => {
+      block.dataset.userSet = 'yes';
     });
-    showToast('AI settings saved!', 'success');
-  });
-  
-  // Open AI sidebar
-  openAiSidebarBtn.addEventListener('click', async () => {
-    try {
-      await chrome.sidePanel.open({ windowId: (await chrome.windows.getCurrent()).id });
-      window.close();
-    } catch (e) {
-      showToast('Failed to open sidebar: ' + e.message, 'error');
-    }
-  });
-}
+  }
 
-// Settings
-async function loadSettings() {
-  const settings = await chrome.storage.local.get([
-    'trackClicks', 'trackKeyboard', 'trackScroll', 'trackDOMChanges',
-    'skipDynamic', 'dynamicThreshold', 'mcpPort', 'mcpHost',
-    'agentEnabled', 'allowMouse', 'allowKeyboard', 'allowNavigation',
-    'allowScripts', 'allowScreenshot', 'showCursor', 'highlightTarget', 
-    'showTooltips', 'collapsibleStates'
-  ]);
-  
-  // Apply settings with defaults
-  elements.trackClicks.checked = settings.trackClicks ?? true;
-  elements.trackKeyboard.checked = settings.trackKeyboard ?? true;
-  elements.trackScroll.checked = settings.trackScroll ?? true;
-  elements.trackDOMChanges.checked = settings.trackDOMChanges ?? true;
-  elements.skipDynamic.checked = settings.skipDynamic ?? true;
-  elements.dynamicThreshold.value = settings.dynamicThreshold ?? 500;
-  elements.thresholdValue.textContent = `${settings.dynamicThreshold ?? 500}ms`;
-  elements.mcpPort.value = settings.mcpPort ?? 3052;
-  elements.mcpHost.value = settings.mcpHost ?? 'localhost';
-  elements.agentEnabled.checked = settings.agentEnabled ?? true;
-  elements.allowMouse.checked = settings.allowMouse ?? true;
-  elements.allowKeyboard.checked = settings.allowKeyboard ?? true;
-  elements.allowNavigation.checked = settings.allowNavigation ?? true;
-  elements.allowScripts.checked = settings.allowScripts ?? true;
-  elements.allowScreenshot.checked = settings.allowScreenshot ?? false;
-  elements.showCursor.checked = settings.showCursor ?? true;
-  elements.highlightTarget.checked = settings.highlightTarget ?? true;
-  elements.showTooltips.checked = settings.showTooltips ?? true;
-  
-  loadCollapsibleStates(settings.collapsibleStates);
-  updateMCPConfig();
-}
+  const stored = await chrome.storage.local.get('apexSetupEditor');
+  const chosen = findEditorTarget(stored.apexSetupEditor);
+  buildEditorPicker(chosen.id);
+  renderEditorTarget(chosen.id);
 
-function saveSettings() {
-  chrome.storage.local.set({
-    trackClicks: elements.trackClicks.checked,
-    trackKeyboard: elements.trackKeyboard.checked,
-    trackScroll: elements.trackScroll.checked,
-    trackDOMChanges: elements.trackDOMChanges.checked,
-    skipDynamic: elements.skipDynamic.checked,
-    dynamicThreshold: parseInt(elements.dynamicThreshold.value),
-    mcpPort: parseInt(elements.mcpPort.value),
-    mcpHost: elements.mcpHost.value,
-    agentEnabled: elements.agentEnabled.checked,
-    allowMouse: elements.allowMouse.checked,
-    allowKeyboard: elements.allowKeyboard.checked,
-    allowNavigation: elements.allowNavigation.checked,
-    allowScripts: elements.allowScripts.checked,
-    allowScreenshot: elements.allowScreenshot.checked,
-    showCursor: elements.showCursor.checked,
-    highlightTarget: elements.highlightTarget.checked,
-    showTooltips: elements.showTooltips.checked
-  });
-}
-
-// Utility
-async function sendToActiveTab(message) {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab?.id) {
-    try {
-      await chrome.tabs.sendMessage(tab.id, message);
-    } catch (e) {
-      // Content script may not be loaded
-    }
-  }
-}
+  currentTab = tab || null;
 
-function showToast(message, type = 'success') {
-  const existing = document.querySelector('.toast');
-  if (existing) existing.remove();
-  
-  const toast = document.createElement('div');
-  toast.className = `toast ${type}`;
-  toast.textContent = message;
-  document.body.appendChild(toast);
-  
-  requestAnimationFrame(() => {
-    toast.classList.add('show');
-    setTimeout(() => {
-      toast.classList.remove('show');
-      setTimeout(() => toast.remove(), 200);
-    }, 2000);
+  await renderNotice();
+  await ensurePolicySeeded();
+  await refresh();
+
+  /*
+    Push and poll together. The push keeps the panel honest the instant a pairing frame arrives;
+    the poll is the safety net for the case the worker was asleep when it should have pushed, which
+    on MV3 is not a rare case.
+  */
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message && message.type === 'apex:stateChanged') refresh();
   });
+  setInterval(refresh, REFRESH_MS);
 }
 
-// Listen for messages
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'LOG_ENTRY') {
-    addLogEntry(message.entry);
-  } else if (message.type === 'AGENT_ACTIVITY') {
-    addAgentActivity(message.action);
-  } else if (message.type === 'MCP_STATUS_CHANGED') {
-    updateMCPUI(message.connected);
-  }
-});
-
-// Initialize
-document.addEventListener('DOMContentLoaded', init);
+init();

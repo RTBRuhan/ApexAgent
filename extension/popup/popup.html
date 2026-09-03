@@ -2,443 +2,172 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Apex Agent</title>
+  <title>ApexAgent</title>
   <link rel="stylesheet" href="popup.css">
 </head>
+<!--
+  The order of the sections below is the order of the questions a person actually has when they
+  open this panel: is it connected, am I being asked to approve something, who is attached, what
+  are they allowed to do, what have they done, and how do I set this up. Anything that is not a
+  live question in the healthy case is folded into a <details> so the connected view fits in one
+  screen without scrolling.
+-->
 <body>
-  <div class="container">
-    <!-- Header -->
-    <header class="header">
-      <div class="logo">
-        <img src="../icons/icon48.png" alt="Apex Agent" class="logo-icon" width="20" height="20">
-        <span class="logo-text">Apex Agent</span>
-      </div>
-      <div class="header-right">
-        <div class="status-indicator" id="statusIndicator">
-          <span class="status-dot"></span>
-          <span class="status-text">Idle</span>
-        </div>
-        <button class="header-btn ai-btn hidden" id="openAiSidebarBtn" title="Open AI Assistant">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          </svg>
-        </button>
-        <button class="header-btn" id="settingsBtn" title="Settings">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-            <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
-          </svg>
-        </button>
-        <button class="header-btn help-btn" id="helpBtn" title="Setup Guide">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-            <line x1="12" y1="17" x2="12.01" y2="17"/>
-          </svg>
-        </button>
-        <a href="https://rtbruhan.github.io" target="_blank" class="header-btn author-btn" title="Author">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
-            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-            <circle cx="12" cy="7" r="4"/>
-          </svg>
-        </a>
-      </div>
+  <div class="shell">
+
+    <header class="masthead">
+      <p class="wordmark">Apex Agent</p>
+      <p class="build"><span id="buildVersion"></span></p>
     </header>
 
-    <!-- Settings Panel (dropdown style) -->
-    <div id="settingsPanel" class="settings-panel hidden">
-      <div class="settings-header">
-        <h3>Settings</h3>
-        <button id="closeSettingsBtn" class="close-btn">✕</button>
+    <!--
+      One-time notice about the removed chat panel. Hidden unless the migration in lib/migrate.js
+      actually deleted something, because warning people about a credential they never stored is
+      its own kind of confusion.
+    -->
+    <section class="notice" id="notice" hidden>
+      <h2 class="notice-head">The chat panel has been removed</h2>
+      <p class="notice-body" id="noticeBody"></p>
+      <button type="button" class="btn btn-quiet" id="noticeDismiss">Got it</button>
+    </section>
+
+    <section class="status" id="statusBlock" data-state="checking">
+      <div class="status-live" id="statusLive" aria-live="polite" aria-atomic="true">
+        <p class="state-line">
+          <span class="tally" aria-hidden="true"></span>
+          <span class="state-word" id="stateWord">Checking</span>
+        </p>
+        <p class="state-say" id="stateSay">Looking for the Apex Agent server on this computer.</p>
       </div>
-      
-      <div class="settings-section">
-        <label class="checkbox-option compact">
-          <input type="checkbox" id="enableAiAssistant">
-          <span class="checkmark"></span>
-          Enable AI Sidebar
-        </label>
-        
-        <div class="ai-settings hidden" id="aiSettings">
-          <div class="setting-row">
-            <label for="popupAiProvider">Provider</label>
-            <select id="popupAiProvider">
-              <option value="openai">OpenAI</option>
-              <option value="anthropic">Anthropic</option>
-              <option value="google">Google</option>
-              <option value="openrouter">OpenRouter</option>
-            </select>
-          </div>
-          <div class="setting-row">
-            <label for="popupApiKey">API Key</label>
-            <input type="password" id="popupApiKey" placeholder="sk-...">
-          </div>
-          <button class="secondary-btn" id="saveAiSettingsBtn">Save</button>
-        </div>
+      <p class="state-extra" id="stateExtra" hidden></p>
+      <div class="state-actions">
+        <button type="button" class="btn btn-quiet" id="reconnectBtn" hidden>Try connecting again</button>
+        <button type="button" class="btn btn-quiet" id="openExtensionsBtn" hidden>Open extensions page</button>
       </div>
-      
-      <div class="settings-section" style="border-top: 1px solid var(--border); padding-top: 10px; margin-top: 4px;">
-        <p class="help-text" style="margin: 0; font-size: 0.7rem;">Apex Agent v1.7.0</p>
+      <details class="tech" id="stateTech" hidden>
+        <summary>Technical detail</summary>
+        <p class="tech-body" id="stateDetail"></p>
+      </details>
+    </section>
+
+    <!--
+      Pairing. This is the only place in the product where the user makes a security decision, so
+      it gets the largest type on the page and it is never collapsed.
+    -->
+    <section class="pairing" id="pairingBlock" hidden aria-labelledby="pairingHead">
+      <h2 class="eyebrow" id="pairingHead">Approve this connection</h2>
+      <p class="pair-say">
+        A program on this computer wants to see and control this browser: your open tabs, the pages
+        you are signed in to, and what you type. Only approve it if the code below matches.
+      </p>
+      <div class="pair-code" id="pairCode">
+        <span class="sr-only" id="pairCodeSpoken"></span>
       </div>
+      <p class="pair-check">
+        The same six digits are printed in your editor's MCP log. If they do not match, or you were
+        not expecting this, choose Reject.
+      </p>
+      <div class="expiry">
+        <div class="expiry-track"><span class="expiry-fill" id="expiryFill"></span></div>
+        <p class="expiry-text" id="expiryText"></p>
+      </div>
+      <div class="pair-actions">
+        <button type="button" class="btn btn-primary" id="approveBtn">Approve</button>
+        <button type="button" class="btn btn-quiet" id="rejectBtn">Reject</button>
+      </div>
+      <p class="pair-error" id="pairError" hidden></p>
+      <details class="tech">
+        <summary>Exactly what approving does</summary>
+        <p class="tech-body">
+          Approving sends the code back to the local server, which then hands this extension a
+          token stored in extension storage. From then on the connection is re-established without
+          asking you again. The code expires after two minutes, and three wrong codes drop the
+          connection. To undo it later, run <code>apex-agent pair --reset</code> or delete
+          <code>~/.apex-agent/token</code>; the next connection will ask you again.
+        </p>
+      </details>
+    </section>
+
+    <section class="clients" aria-labelledby="clientsHead">
+      <h2 class="eyebrow" id="clientsHead">Editors attached <span class="count" id="clientCount"></span></h2>
+      <ul class="client-list" id="clientList"></ul>
+      <p class="empty" id="clientEmpty">No editor is attached yet.</p>
+    </section>
+
+    <!--
+      The master switch is deliberately outside the collapsible permissions block: it is the stop
+      button, and a stop button you have to go looking for is not a stop button.
+    -->
+    <div class="master">
+      <div class="master-text">
+        <label class="master-label" for="masterSwitch">Editors may act in this browser</label>
+        <p class="master-say" id="masterSay">Turn this off to refuse everything without disconnecting.</p>
+      </div>
+      <input class="switch" type="checkbox" role="switch" id="masterSwitch" aria-describedby="masterSay">
     </div>
 
-    <!-- Tabs -->
-    <nav class="tabs">
-      <button class="tab active" data-tab="mcp">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 2L2 7L12 12L22 7L12 2Z"/>
-          <path d="M2 17L12 22L22 17"/>
-          <path d="M2 12L12 17L22 12"/>
-        </svg>
-        MCP
-      </button>
-      <button class="tab" data-tab="agent">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="4" y="4" width="16" height="16" rx="2"/>
-          <path d="M9 9L15 15M15 9L9 15"/>
-        </svg>
-        Agent
-      </button>
-      <button class="tab" data-tab="record">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="8"/>
-        </svg>
-        Record
-      </button>
-    </nav>
-
-    <!-- Content -->
-    <main class="content">
-      <!-- MCP Tab -->
-      <section class="tab-content active" id="mcpTab">
-        <!-- Status Card -->
-        <div class="mcp-status-card">
-          <div class="mcp-indicator" id="mcpIndicator">
-            <span class="pulse"></span>
-          </div>
-          <div class="mcp-info">
-            <h3>MCP Server</h3>
-            <p id="mcpStatusText">Not Connected</p>
-          </div>
-        </div>
-
-        <!-- Config -->
-        <div class="collapsible" id="mcpConfigCollapsible">
-          <div class="collapsible-header">
-            <h3>Server Configuration</h3>
-            <svg class="collapsible-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </div>
-          <div class="collapsible-content">
-            <div class="input-row">
-              <div class="input-group">
-                <label for="mcpHost">Host</label>
-                <input type="text" id="mcpHost" value="localhost">
-              </div>
-              <div class="input-group" style="max-width: 80px;">
-                <label for="mcpPort">Port</label>
-                <input type="number" id="mcpPort" value="3052">
-              </div>
-            </div>
-            <button class="primary-btn" id="startMcpBtn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polygon points="5,3 19,12 5,21"/>
-              </svg>
-              Connect
-            </button>
-          </div>
-        </div>
-
-        <!-- Tools -->
-        <div class="collapsible" id="toolsCollapsible">
-          <div class="collapsible-header">
-            <h3>Available Tools</h3>
-            <svg class="collapsible-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </div>
-          <div class="collapsible-content">
-            <div class="tools-grid">
-              <div class="tool-item"><span class="tool-icon">🖱️</span><span class="tool-name">click</span></div>
-              <div class="tool-item"><span class="tool-icon">⌨️</span><span class="tool-name">type</span></div>
-              <div class="tool-item"><span class="tool-icon">🧭</span><span class="tool-name">navigate</span></div>
-              <div class="tool-item"><span class="tool-icon">📸</span><span class="tool-name">snapshot</span></div>
-              <div class="tool-item"><span class="tool-icon">📜</span><span class="tool-name">scroll</span></div>
-              <div class="tool-item"><span class="tool-icon">🔍</span><span class="tool-name">evaluate</span></div>
-              <div class="tool-item"><span class="tool-icon">⏳</span><span class="tool-name">wait</span></div>
-              <div class="tool-item"><span class="tool-icon">👆</span><span class="tool-name">hover</span></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Setup -->
-        <div class="mcp-instructions">
-          <div class="setup-header">
-            <h3>Quick Setup</h3>
-            <button class="guide-link" id="openGuideBtn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                <polyline points="15 3 21 3 21 9"/>
-                <line x1="10" y1="14" x2="21" y2="3"/>
-              </svg>
-              Full Guide
-            </button>
-          </div>
-          <div class="instruction-steps">
-            <div class="step">
-              <span class="step-num">1</span>
-              <p>Install <a href="https://nodejs.org" target="_blank">Node.js</a> if you don't have it</p>
-            </div>
-            <div class="step">
-              <span class="step-num">2</span>
-              <p>Add the config below to Cursor's MCP settings</p>
-            </div>
-            <div class="step">
-              <span class="step-num">3</span>
-              <p>Restart Cursor, then click <strong>Connect</strong> above</p>
-            </div>
-          </div>
-          <div class="config-code">
-            <pre id="mcpConfigCode">{
-  "apex-agent": {
-    "command": "node",
-    "args": ["/path/to/ApexAgent/mcp-server/index.js"]
-  }
-}</pre>
-            <button class="copy-config-btn" id="copyConfigBtn">Copy</button>
-          </div>
-          <p class="setup-hint">Need help? Click the <strong>?</strong> button above for a step-by-step guide.</p>
-        </div>
-      </section>
-
-      <!-- Agent Tab -->
-      <section class="tab-content" id="agentTab">
-        <!-- Control Panel -->
-        <div class="agent-control-panel">
-          <div>
-            <h3>Agent Control</h3>
-            <p class="help-text">Allow AI to control browser</p>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="agentEnabled" checked>
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-
-        <!-- Permissions -->
-        <div class="collapsible" id="permissionsCollapsible">
-          <div class="collapsible-header">
-            <h3>Permissions</h3>
-            <svg class="collapsible-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </div>
-          <div class="collapsible-content">
-            <label class="checkbox-option">
-              <input type="checkbox" id="allowMouse" checked>
-              <span class="checkmark"></span>
-              Mouse Control
-            </label>
-            <label class="checkbox-option">
-              <input type="checkbox" id="allowKeyboard" checked>
-              <span class="checkmark"></span>
-              Keyboard Input
-            </label>
-            <label class="checkbox-option">
-              <input type="checkbox" id="allowNavigation" checked>
-              <span class="checkmark"></span>
-              Navigation
-            </label>
-            <label class="checkbox-option">
-              <input type="checkbox" id="allowScripts" checked>
-              <span class="checkmark"></span>
-              Script Execution
-            </label>
-            <label class="checkbox-option">
-              <input type="checkbox" id="allowScreenshot">
-              <span class="checkmark"></span>
-              Screenshots
-            </label>
-          </div>
-        </div>
-
-        <!-- Visual Feedback -->
-        <div class="collapsible" id="visualCollapsible">
-          <div class="collapsible-header">
-            <h3>Visual Feedback</h3>
-            <svg class="collapsible-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </div>
-          <div class="collapsible-content">
-            <label class="checkbox-option">
-              <input type="checkbox" id="showCursor" checked>
-              <span class="checkmark"></span>
-              Show AI Cursor
-            </label>
-            <label class="checkbox-option">
-              <input type="checkbox" id="highlightTarget" checked>
-              <span class="checkmark"></span>
-              Highlight Targets
-            </label>
-            <label class="checkbox-option">
-              <input type="checkbox" id="showTooltips" checked>
-              <span class="checkmark"></span>
-              Show Action Tooltips
-            </label>
-          </div>
-        </div>
-
-        <!-- Activity Log -->
-        <div class="agent-activity">
-          <div class="section-header">
-            <h3>Recent Activity</h3>
-          </div>
-          <div class="activity-log" id="agentActivityLog">
-            <div class="activity-empty">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M12 6V12L16 14"/>
-              </svg>
-              <p>No agent activity yet</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Record Tab -->
-      <section class="tab-content" id="recordTab">
-        <!-- Record Controls -->
-        <div class="record-controls">
-          <button class="record-btn" id="recordBtn">
-            <span class="record-icon"></span>
-            <span class="record-text">Record</span>
-          </button>
-          <button class="pause-btn" id="pauseBtn" disabled title="Pause (Ctrl+P)">
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <rect x="6" y="4" width="4" height="16"/>
-              <rect x="14" y="4" width="4" height="16"/>
-            </svg>
-          </button>
-          <span class="record-timer" id="recordTimer">00:00</span>
-        </div>
-
-        <!-- Options (Collapsible) -->
-        <div class="collapsible" id="optionsCollapsible">
-          <div class="collapsible-header">
-            <h3>Recording Options</h3>
-            <svg class="collapsible-toggle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </div>
-          <div class="collapsible-content">
-            <label class="checkbox-option">
-              <input type="checkbox" id="trackClicks" checked>
-              <span class="checkmark"></span>
-              Track Clicks
-            </label>
-            <label class="checkbox-option">
-              <input type="checkbox" id="trackKeyboard" checked>
-              <span class="checkmark"></span>
-              Track Keyboard
-            </label>
-            <label class="checkbox-option">
-              <input type="checkbox" id="trackScroll" checked>
-              <span class="checkmark"></span>
-              Track Scroll
-            </label>
-            <label class="checkbox-option">
-              <input type="checkbox" id="trackDOMChanges" checked>
-              <span class="checkmark"></span>
-              Track DOM Changes
-            </label>
-            <label class="checkbox-option">
-              <input type="checkbox" id="skipDynamic" checked>
-              <span class="checkmark"></span>
-              Skip Dynamic Changes
-            </label>
-            <div class="threshold-row">
-              <span class="help-text" style="margin:0">Threshold</span>
-              <input type="range" id="dynamicThreshold" min="50" max="2000" value="500">
-              <span class="threshold-value" id="thresholdValue">500ms</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Log Section -->
-        <div class="log-section">
-          <div class="log-header">
-            <div class="log-stats">
-              <h3>Log</h3>
-              <span class="log-count" id="logCount">0 entries</span>
-            </div>
-            <div class="log-actions">
-              <button class="action-btn" id="copyLogBtn" title="Copy (Ctrl+C)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="9" y="9" width="13" height="13" rx="2"/>
-                  <path d="M5 15H4C2.89543 15 2 14.1046 2 13V4C2 2.89543 2.89543 2 4 2H13C14.1046 2 15 2.89543 15 4V5"/>
-                </svg>
-              </button>
-              <button class="action-btn" id="exportLogBtn" title="Export JSON">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15V19C21 20.1046 20.1046 21 19 21H5C3.89543 21 3 20.1046 3 19V15"/>
-                  <path d="M12 3V15M12 15L8 11M12 15L16 11"/>
-                </svg>
-              </button>
-              <button class="action-btn" id="clearLogBtn" title="Clear">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M3 6H5H21"/>
-                  <path d="M8 6V4C8 3.44772 8.44772 3 9 3H15C15.5523 3 16 3.44772 16 4V6M19 6V20C19 20.5523 18.5523 21 18 21H6C5.44772 21 5 20.5523 5 20V6H19Z"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <!-- Search -->
-          <div class="search-box">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="11" cy="11" r="8"/>
-              <path d="M21 21L16.65 16.65"/>
-            </svg>
-            <input type="text" id="logSearch" placeholder="Search logs...">
-          </div>
-
-          <!-- Filters -->
-          <div class="log-filter">
-            <button class="filter-btn active" data-filter="all">All</button>
-            <button class="filter-btn" data-filter="click">Click</button>
-            <button class="filter-btn" data-filter="keyboard">Keyboard</button>
-            <button class="filter-btn" data-filter="scroll">Scroll</button>
-            <button class="filter-btn" data-filter="dom">DOM</button>
-            <button class="filter-btn" data-filter="navigation">Nav</button>
-          </div>
-
-          <!-- Log Container -->
-          <div class="log-container" id="logContainer">
-            <div class="log-empty">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M12 8V12L14 14"/>
-              </svg>
-              <p>Start recording to capture interactions</p>
-            </div>
-          </div>
-        </div>
-      </section>
-    </main>
-
-    <!-- Footer -->
-    <footer class="footer">
-      <span class="version">v1.7.0</span>
-      <div class="footer-links">
-        <a href="#" id="shortcutsLink">Shortcuts</a>
-        <a href="#" id="docsLink">Docs</a>
+    <details class="block" id="permBlock">
+      <summary>
+        <span class="eyebrow">What editors may do</span>
+        <span class="summary-value" id="permSummary"></span>
+      </summary>
+      <div class="block-body">
+        <p class="paused-note" id="pausedNote" hidden>
+          Everything is paused right now. These settings take effect when you turn Apex Agent back on.
+        </p>
+        <ul class="perm-list" id="permList"></ul>
+        <details class="tech">
+          <summary>How these are enforced</summary>
+          <p class="tech-body">
+            Every request from an editor is checked against these settings before anything happens.
+            A request for something switched off is refused with <code>NOT_ALLOWED</code>, and the
+            refusal is reported to the editor rather than silently ignored. If these settings cannot
+            be read at all, everything is refused.
+          </p>
+        </details>
       </div>
-    </footer>
-  </div>
+    </details>
 
+    <details class="block" id="activityBlock">
+      <summary>
+        <span class="eyebrow">Recent activity</span>
+        <span class="summary-value" id="activitySummary"></span>
+      </summary>
+      <div class="block-body">
+        <ol class="activity-list" id="activityList"></ol>
+        <p class="empty" id="activityEmpty">Nothing has been done in this browser yet.</p>
+      </div>
+    </details>
+
+    <details class="block" id="setupBlock">
+      <summary>
+        <span class="eyebrow">Set up your editor</span>
+        <span class="summary-value">Cursor, Claude Code, Codex</span>
+      </summary>
+      <div class="block-body">
+        <fieldset class="segmented" id="editorPicker">
+          <legend class="sr-only">Choose your editor</legend>
+          <!-- Radios rather than ARIA tabs: arrow-key navigation and grouping come for free. -->
+          <div class="segmented-row" id="editorOptions"></div>
+        </fieldset>
+        <p class="file-line">
+          Put this in <code class="file-path" id="setupPath"></code>
+        </p>
+        <p class="file-note" id="setupNote"></p>
+        <pre class="snippet" id="setupSnippet" tabindex="0"></pre>
+        <div class="snippet-actions">
+          <button type="button" class="btn btn-quiet" id="copyBtn">Copy</button>
+          <p class="copy-status" id="copyStatus" aria-live="polite"></p>
+        </div>
+        <p class="file-note">Save the file, then fully restart your editor.</p>
+      </div>
+    </details>
+
+    <footer class="footpath">
+      <button type="button" class="link" id="guideBtn">Open the five-minute setup guide</button>
+    </footer>
+
+  </div>
   <script src="popup.js" type="module"></script>
 </body>
 </html>

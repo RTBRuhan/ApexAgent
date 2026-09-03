@@ -1,0 +1,429 @@
+/*
+  Same visual language as the popup — condensed display caps, terminal mono for anything you are
+  meant to copy or compare, the tally palette for state words — set on a wider measure. The one
+  structural device is a left gutter carrying the step figure with a hairline running through it:
+  this page really is a sequence, one step gates the next, and the line is there to say so.
+*/
+
+:root {
+  color-scheme: light dark;
+
+  --face-display: "Bahnschrift SemiCondensed", "DIN Alternate", "Avenir Next Condensed",
+    "Liberation Sans Narrow", "Segoe UI", system-ui, sans-serif;
+  --face-text: "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont,
+    system-ui, "Helvetica Neue", sans-serif;
+  --face-mono: "Cascadia Mono", "SF Mono", "JetBrains Mono", ui-monospace, Consolas, monospace;
+
+  --paper: #eef1f0;
+  --card: #ffffff;
+  --sunk: #f5f7f6;
+  --ink: #11171a;
+  --ink-2: #455157;
+  --ink-3: #647177;
+  --rule: #d5dddc;
+  --rule-soft: #e6ebea;
+  --focus: #16509c;
+
+  --live-ink: #0a6247;
+  --wait-ink: #6f4c00;
+  --halt-ink: #4c565b;
+  --stop-ink: #93251b;
+  --work-ink: #2f3f92;
+
+  --amber-face: #fffbf1;
+  --amber-rule: #e4cf9a;
+
+  --radius: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0d1113;
+    --card: #161b1e;
+    --sunk: #111618;
+    --ink: #e9eeed;
+    --ink-2: #aab5b9;
+    --ink-3: #8b969b;
+    --rule: #242c30;
+    --rule-soft: #1c2225;
+    --focus: #93b8ff;
+
+    --live-ink: #5ad2a5;
+    --wait-ink: #e8b64a;
+    --halt-ink: #98a3a8;
+    --stop-ink: #ff9587;
+    --work-ink: #a3b3ff;
+
+    --amber-face: #1d1a12;
+    --amber-rule: #4d4126;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0ms !important; animation-duration: 0ms !important; }
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--face-text);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.page { max-width: 720px; margin: 0 auto; padding: 44px 22px 72px; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 3px; }
+
+a { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
+a:hover { color: var(--ink-2); }
+
+/* ---------- masthead ---------- */
+
+.wordmark {
+  font-family: var(--face-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+h1 {
+  font-family: var(--face-display);
+  font-size: 40px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.08;
+  margin: 10px 0 12px;
+}
+
+.standfirst { font-size: 16px; color: var(--ink-2); max-width: 56ch; }
+
+.masthead { margin-bottom: 34px; }
+
+/* ---------- prerequisites ---------- */
+
+.before {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 40px;
+}
+
+.before h2 {
+  font-family: var(--face-display);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 10px;
+}
+
+.before ul { list-style: none; }
+
+.before li {
+  padding: 5px 0 5px 18px;
+  position: relative;
+  color: var(--ink-2);
+  font-size: 14px;
+  border-top: 1px solid var(--rule-soft);
+}
+
+.before li:first-child { border-top: none; }
+
+.before li::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 14px;
+  width: 7px; height: 1px;
+  background: var(--ink-3);
+}
+
+/* ---------- steps ---------- */
+
+.step {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  padding-bottom: 34px;
+}
+
+.step-figure {
+  font-family: var(--face-display);
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--ink-3);
+  line-height: 1;
+  position: relative;
+  padding-top: 1px;
+}
+
+/* The hairline that makes the gutter read as a path rather than a column of numbers. */
+.step-figure::after {
+  content: "";
+  position: absolute;
+  left: 8px; top: 36px; bottom: -34px;
+  width: 1px;
+  background: var(--rule);
+}
+
+.step:last-of-type .step-figure::after { display: none; }
+
+.step h2 {
+  font-family: var(--face-display);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  margin-bottom: 8px;
+}
+
+.step > div > p { color: var(--ink-2); margin-bottom: 10px; }
+
+.step ol, .step ul { color: var(--ink-2); margin: 0 0 12px 18px; }
+.step li { margin-bottom: 5px; }
+
+.tight { margin-bottom: 4px; }
+
+/* ---------- routes ---------- */
+
+.route {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 12px;
+}
+
+.route h3 {
+  font-family: var(--face-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin-bottom: 4px;
+}
+
+.route-tag {
+  font-family: var(--face-display);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--live-ink);
+  display: block;
+  margin-bottom: 2px;
+}
+
+.route p { font-size: 14px; color: var(--ink-2); }
+
+/* ---------- code ---------- */
+
+code {
+  font-family: var(--face-mono);
+  font-size: 13px;
+  background: var(--sunk);
+  border: 1px solid var(--rule-soft);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+
+pre {
+  font-family: var(--face-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  background: var(--sunk);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin: 10px 0;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+pre code { background: none; border: none; padding: 0; font-size: inherit; }
+
+.snippet-actions { display: flex; align-items: center; gap: 12px; }
+
+.copy-status { font-size: 13px; color: var(--live-ink); }
+
+/* ---------- callout ---------- */
+
+.callout {
+  background: var(--amber-face);
+  border: 1px solid var(--amber-rule);
+  border-radius: var(--radius);
+  padding: 13px 15px;
+  margin: 12px 0;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.callout strong { color: var(--ink); }
+
+/* ---------- buttons and picker ---------- */
+
+.btn {
+  font-family: var(--face-text);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 15px;
+  border-radius: 6px;
+  border: 1px solid var(--rule);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.btn:hover { background: var(--sunk); border-color: var(--ink-3); }
+
+.btn:disabled,
+.btn:disabled:hover {
+  background: var(--sunk);
+  border-color: var(--rule);
+  color: var(--ink-3);
+  cursor: default;
+}
+
+.segmented { border: none; margin: 4px 0 14px; }
+
+.segmented-row {
+  display: flex;
+  background: var(--sunk);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 3px;
+  gap: 3px;
+  max-width: 360px;
+}
+
+.segmented-row input { position: absolute; opacity: 0; pointer-events: none; }
+
+.segmented-row label {
+  flex: 1;
+  text-align: center;
+  font-size: 14px;
+  padding: 7px 6px;
+  border-radius: 5px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.segmented-row input:checked + label {
+  background: var(--card);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.segmented-row input:focus-visible + label {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.file-line { font-size: 14px; }
+.file-note { font-size: 13px; color: var(--ink-3); }
+
+/* ---------- live check ---------- */
+
+.check {
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--lamp, var(--rule));
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin: 12px 0;
+}
+
+.check[data-state="connected"]    { --lamp: #10a374; --word: var(--live-ink); }
+.check[data-state="pairing"]      { --lamp: #dfa106; --word: var(--wait-ink); }
+.check[data-state="reconnecting"] { --lamp: #5468d4; --word: var(--work-ink); }
+.check[data-state="blocked"]      { --lamp: #c2352a; --word: var(--stop-ink); }
+.check[data-state="unavailable"]  { --lamp: #c2352a; --word: var(--stop-ink); }
+.check[data-state="not_running"]  { --lamp: #8d989d; --word: var(--halt-ink); }
+.check[data-state="checking"]     { --lamp: #8d989d; --word: var(--halt-ink); }
+
+.check-word {
+  font-family: var(--face-display);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--word, var(--ink));
+}
+
+.check-say { font-size: 14px; color: var(--ink-2); margin: 4px 0 10px; }
+
+/* ---------- troubleshooting ---------- */
+
+.trouble { margin-top: 6px; }
+
+.trouble-item {
+  border-top: 1px solid var(--rule);
+  padding: 14px 0;
+}
+
+.trouble-item:first-child { border-top: none; }
+
+.trouble-word {
+  font-family: var(--face-display);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+
+.trouble-item[data-state="connected"]    .trouble-word { color: var(--live-ink); }
+.trouble-item[data-state="pairing"]      .trouble-word { color: var(--wait-ink); }
+.trouble-item[data-state="reconnecting"] .trouble-word { color: var(--work-ink); }
+.trouble-item[data-state="blocked"]      .trouble-word { color: var(--stop-ink); }
+.trouble-item[data-state="unavailable"]  .trouble-word { color: var(--stop-ink); }
+.trouble-item[data-state="not_running"]  .trouble-word { color: var(--halt-ink); }
+
+.trouble-say { font-size: 13.5px; color: var(--ink-3); }
+.trouble-fix { font-size: 14px; color: var(--ink-2); margin-top: 4px; }
+
+.section-head {
+  font-family: var(--face-display);
+  font-size: 22px;
+  font-weight: 600;
+  margin: 14px 0 6px;
+}
+
+.also { margin-top: 22px; }
+
+.also h3 {
+  font-family: var(--face-display);
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+
+.also p { font-size: 14px; color: var(--ink-2); margin-bottom: 14px; }
+
+/* ---------- footer ---------- */
+
+footer {
+  margin-top: 44px;
+  padding-top: 20px;
+  border-top: 1px solid var(--rule);
+  font-size: 13px;
+  color: var(--ink-3);
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 560px) {
+  h1 { font-size: 31px; }
+  .step { grid-template-columns: 38px 1fr; }
+  .step-figure::after { left: 6px; }
+}

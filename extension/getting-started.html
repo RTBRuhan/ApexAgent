@@ -3,811 +3,222 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Apex Agent - Getting Started</title>
-  <style>
-    :root {
-      --bg-primary: #09090b;
-      --bg-secondary: #18181b;
-      --bg-card: #1c1c1f;
-      --bg-elevated: #27272a;
-      --text-primary: #fafafa;
-      --text-secondary: #a1a1aa;
-      --text-muted: #71717a;
-      --accent: #3b82f6;
-      --accent-hover: #2563eb;
-      --success: #22c55e;
-      --warning: #eab308;
-      --error: #ef4444;
-      --border: #27272a;
-      --border-light: #3f3f46;
-    }
-    
-    /* Light Mode */
-    .light-mode {
-      --bg-primary: #ffffff;
-      --bg-secondary: #f4f4f5;
-      --bg-card: #fafafa;
-      --bg-elevated: #e4e4e7;
-      --text-primary: #18181b;
-      --text-secondary: #52525b;
-      --text-muted: #71717a;
-      --border: #e4e4e7;
-      --border-light: #d4d4d8;
-    }
-    
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      line-height: 1.7;
-      font-size: 15px;
-      -webkit-font-smoothing: antialiased;
-      transition: background 0.2s, color 0.2s;
-    }
-    
-    .wrapper {
-      max-width: 720px;
-      margin: 0 auto;
-      padding: 60px 24px 80px;
-    }
-    
-    /* Header */
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 56px;
-    }
-    
-    .header-left {
-      flex: 1;
-    }
-    
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      margin-bottom: 12px;
-    }
-    
-    .brand img {
-      width: 40px;
-      height: 40px;
-    }
-    
-    .brand h1 {
-      font-size: 1.75rem;
-      font-weight: 600;
-      letter-spacing: -0.02em;
-      color: var(--text-primary);
-    }
-    
-    .tagline {
-      color: var(--text-secondary);
-      font-size: 1.05rem;
-    }
-    
-    /* Theme Toggle */
-    .theme-toggle {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      cursor: pointer;
-      color: var(--text-secondary);
-      font-size: 0.85rem;
-      transition: all 0.15s;
-    }
-    
-    .theme-toggle:hover {
-      background: var(--bg-elevated);
-      color: var(--text-primary);
-    }
-    
-    .theme-toggle svg {
-      width: 18px;
-      height: 18px;
-    }
-    
-    /* Intro Card */
-    .intro {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 24px;
-      margin-bottom: 48px;
-    }
-    
-    .intro p {
-      color: var(--text-secondary);
-    }
-    
-    .intro p + p {
-      margin-top: 12px;
-    }
-    
-    .intro strong {
-      color: var(--text-primary);
-      font-weight: 500;
-    }
-    
-    /* Section */
-    .section {
-      margin-bottom: 48px;
-    }
-    
-    .section-header {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      margin-bottom: 20px;
-      padding-bottom: 16px;
-      border-bottom: 1px solid var(--border);
-    }
-    
-    .step-number {
-      width: 28px;
-      height: 28px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: var(--accent);
-      color: white;
-      font-size: 0.8rem;
-      font-weight: 600;
-      border-radius: 6px;
-      flex-shrink: 0;
-    }
-    
-    .section-header h2 {
-      font-size: 1.15rem;
-      font-weight: 600;
-      letter-spacing: -0.01em;
-    }
-    
-    /* Card */
-    .card {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 24px;
-    }
-    
-    .card + .card {
-      margin-top: 16px;
-    }
-    
-    .card h3 {
-      font-size: 0.95rem;
-      font-weight: 600;
-      margin-bottom: 12px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    
-    .card p {
-      color: var(--text-secondary);
-    }
-    
-    /* Button */
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 18px;
-      background: var(--accent);
-      color: white;
-      border: none;
-      border-radius: 6px;
-      font-size: 0.9rem;
-      font-weight: 500;
-      text-decoration: none;
-      cursor: pointer;
-      transition: background 0.15s;
-      margin-top: 16px;
-    }
-    
-    .btn:hover {
-      background: var(--accent-hover);
-      text-decoration: none;
-    }
-    
-    .btn svg {
-      width: 16px;
-      height: 16px;
-    }
-    
-    .btn-outline {
-      background: transparent;
-      border: 1px solid var(--border-light);
-      color: var(--text-primary);
-    }
-    
-    .btn-outline:hover {
-      background: var(--bg-elevated);
-      border-color: var(--text-muted);
-    }
-    
-    .btn-success {
-      background: var(--success);
-    }
-    
-    .btn-success:hover {
-      background: #16a34a;
-    }
-    
-    /* Lists */
-    ol, ul {
-      padding-left: 20px;
-      color: var(--text-secondary);
-    }
-    
-    li {
-      margin-bottom: 10px;
-      padding-left: 4px;
-    }
-    
-    li strong {
-      color: var(--text-primary);
-      font-weight: 500;
-    }
-    
-    li::marker {
-      color: var(--text-muted);
-    }
-    
-    /* Code */
-    code {
-      background: var(--bg-elevated);
-      padding: 2px 7px;
-      border-radius: 4px;
-      font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', monospace;
-      font-size: 0.85em;
-      color: var(--accent);
-    }
-    
-    .code-block {
-      background: var(--bg-secondary);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      margin: 16px 0;
-      position: relative;
-    }
-    
-    .code-block pre {
-      padding: 18px;
-      font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', monospace;
-      font-size: 0.82rem;
-      color: var(--text-secondary);
-      overflow-x: auto;
-      line-height: 1.6;
-    }
-    
-    .code-block .copy-btn {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      padding: 5px 10px;
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 5px;
-      color: var(--text-muted);
-      font-size: 0.7rem;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-    
-    .code-block .copy-btn:hover {
-      background: var(--accent);
-      color: white;
-      border-color: var(--accent);
-    }
-    
-    .dynamic-path {
-      color: var(--success);
-    }
-    
-    .path-placeholder {
-      color: var(--warning);
-    }
-    
-    /* Notes */
-    .note {
-      display: flex;
-      gap: 14px;
-      padding: 16px 18px;
-      background: var(--bg-secondary);
-      border-left: 3px solid var(--accent);
-      border-radius: 0 8px 8px 0;
-      margin: 18px 0;
-    }
-    
-    .note.warning {
-      border-left-color: var(--warning);
-    }
-    
-    .note.success {
-      border-left-color: var(--success);
-    }
-    
-    .note-icon {
-      font-size: 1rem;
-      flex-shrink: 0;
-      line-height: 1.5;
-    }
-    
-    .note-content {
-      color: var(--text-secondary);
-      font-size: 0.9rem;
-    }
-    
-    .note-content strong {
-      color: var(--text-primary);
-      font-weight: 500;
-    }
-    
-    /* Tabs */
-    .tabs {
-      display: flex;
-      gap: 4px;
-      margin-bottom: 16px;
-      background: var(--bg-secondary);
-      padding: 4px;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-    }
-    
-    .tab {
-      flex: 1;
-      padding: 10px 16px;
-      background: transparent;
-      border: none;
-      color: var(--text-muted);
-      cursor: pointer;
-      font-size: 0.85rem;
-      font-weight: 500;
-      border-radius: 6px;
-      transition: all 0.15s;
-    }
-    
-    .tab:hover {
-      color: var(--text-secondary);
-    }
-    
-    .tab.active {
-      background: var(--bg-card);
-      color: var(--text-primary);
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
-    
-    .tab-content {
-      display: none;
-    }
-    
-    .tab-content.active {
-      display: block;
-    }
-    
-    /* Links */
-    a {
-      color: var(--accent);
-      text-decoration: none;
-    }
-    
-    a:hover {
-      text-decoration: underline;
-    }
-    
-    /* Features Grid */
-    .features {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
-    }
-    
-    .feature {
-      background: var(--bg-card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 18px;
-    }
-    
-    .feature h4 {
-      font-size: 0.9rem;
-      font-weight: 500;
-      margin-bottom: 6px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    
-    .feature p {
-      color: var(--text-muted);
-      font-size: 0.82rem;
-      line-height: 1.5;
-    }
-    
-    /* Download Box */
-    .download-box {
-      background: var(--bg-secondary);
-      border: 2px dashed var(--border-light);
-      border-radius: 10px;
-      padding: 24px;
-      text-align: center;
-      margin: 20px 0;
-    }
-    
-    .download-box h4 {
-      font-size: 1rem;
-      margin-bottom: 8px;
-    }
-    
-    .download-box p {
-      color: var(--text-muted);
-      font-size: 0.9rem;
-      margin-bottom: 16px;
-    }
-    
-    .download-box .btn {
-      margin: 0;
-    }
-    
-    /* Path display */
-    .path-display {
-      margin-top: 16px;
-      padding: 12px 16px;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      font-family: 'SF Mono', monospace;
-      font-size: 0.85rem;
-      color: var(--text-secondary);
-      word-break: break-all;
-    }
-    
-    .path-display strong {
-      color: var(--text-primary);
-      font-weight: 500;
-    }
-    
-    /* Footer */
-    footer {
-      margin-top: 64px;
-      padding-top: 32px;
-      border-top: 1px solid var(--border);
-      text-align: center;
-      color: var(--text-muted);
-      font-size: 0.85rem;
-    }
-    
-    footer a {
-      color: var(--text-secondary);
-    }
-    
-    footer .links {
-      margin-top: 12px;
-      display: flex;
-      justify-content: center;
-      gap: 20px;
-    }
-    
-    /* Responsive */
-    @media (max-width: 600px) {
-      .wrapper {
-        padding: 40px 20px 60px;
-      }
-      
-      header {
-        flex-direction: column;
-        gap: 20px;
-      }
-      
-      .features {
-        grid-template-columns: 1fr;
-      }
-      
-      .tabs {
-        flex-direction: column;
-      }
-    }
-  </style>
+  <title>Apex Agent — set up in five minutes</title>
+  <link rel="stylesheet" href="getting-started.css">
 </head>
+<!--
+  This page is the fix for an onboarding path that could not be followed. The old version never
+  mentioned `npm install`, so anyone who cloned the repo and pasted the config got
+  ERR_MODULE_NOT_FOUND at the first step with nothing on the page to explain it. Both routes to a
+  running server are spelled out here, the config snippets come from lib/editor-setup.js so they
+  cannot drift from the ones in the extension panel, and the troubleshooting section is generated
+  from the same state copy the panel displays.
+-->
 <body>
-  <div class="wrapper">
-    <header>
-      <div class="header-left">
-        <div class="brand">
-          <img src="icons/icon128.png" alt="Apex Agent">
-          <h1>Apex Agent</h1>
-        </div>
-        <p class="tagline">Connect AI assistants to control your browser</p>
-      </div>
-      <button class="theme-toggle" id="themeToggle" title="Toggle light/dark mode">
-        <svg id="sunIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
-          <circle cx="12" cy="12" r="5"/>
-          <line x1="12" y1="1" x2="12" y2="3"/>
-          <line x1="12" y1="21" x2="12" y2="23"/>
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
-          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-          <line x1="1" y1="12" x2="3" y2="12"/>
-          <line x1="21" y1="12" x2="23" y2="12"/>
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
-          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-        </svg>
-        <svg id="moonIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-        </svg>
-        <span id="themeLabel">Light</span>
-      </button>
+  <div class="page">
+
+    <header class="masthead">
+      <p class="wordmark">Apex Agent</p>
+      <h1>Set up in five minutes</h1>
+      <p class="standfirst">
+        Apex Agent lets the AI assistant in your code editor work in this browser — the real one,
+        with your logins and your open tabs. Five steps, in order. Each one gates the next, so do
+        not skip ahead.
+      </p>
     </header>
-    
-    <div class="intro">
-      <p>Apex Agent lets AI tools like <strong>Cursor</strong>, <strong>Claude Desktop</strong>, or any MCP-compatible assistant control your browser. The AI can click, type, navigate, take screenshots, and debug web pages.</p>
-      <p>Follow the steps below to get started. Setup takes about 5 minutes.</p>
-    </div>
-    
-    <!-- Step 1 -->
-    <section class="section">
-      <div class="section-header">
-        <span class="step-number">1</span>
-        <h2>Install Node.js</h2>
-      </div>
-      <div class="card">
-        <p>Node.js is required to run the server that connects your AI tool to the browser.</p>
-        <a href="https://nodejs.org" target="_blank" class="btn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-            <polyline points="15 3 21 3 21 9"/>
-            <line x1="10" y1="14" x2="21" y2="3"/>
-          </svg>
-          Download Node.js
-        </a>
-        <div class="note">
-          <span class="note-icon">💡</span>
-          <div class="note-content">
-            <strong>Already have Node.js?</strong> Check by opening a terminal and typing <code>node --version</code>. Version 18 or higher is recommended.
-          </div>
-        </div>
-      </div>
+
+    <section class="before">
+      <h2>Before you start</h2>
+      <ul>
+        <li><strong>Node.js 18 or newer.</strong> Check with <code>node --version</code> in a terminal.</li>
+        <li><strong>An editor that speaks MCP:</strong> Cursor, Claude Code, or Codex CLI.</li>
+        <li><strong>This extension installed in Chrome.</strong> If you are reading this page from the extension, that part is done.</li>
+      </ul>
     </section>
-    
-    <!-- Step 2 -->
-    <section class="section">
-      <div class="section-header">
-        <span class="step-number">2</span>
-        <h2>Download the MCP Server</h2>
-      </div>
-      <div class="card">
-        <p>The extension needs a small server running on your computer to communicate with AI tools. Download it from GitHub:</p>
-        
-        <div class="download-box">
-          <h4>📦 Download MCP Server</h4>
-          <p>Download and extract the zip file to any folder on your computer.</p>
-          <a href="https://github.com/RTBRuhan/ApexAgent/releases/latest" target="_blank" class="btn btn-success">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            Download from GitHub
-          </a>
-        </div>
-        
-        <div class="note">
-          <span class="note-icon">📁</span>
-          <div class="note-content">
-            <strong>After downloading:</strong> Extract the zip to a folder you'll remember, like:<br><br>
-            Windows: <code>C:\ApexAgent</code><br>
-            Mac: <code>/Users/YourName/ApexAgent</code>
-          </div>
-        </div>
-      </div>
-    </section>
-    
-    <!-- Step 3 -->
-    <section class="section">
-      <div class="section-header">
-        <span class="step-number">3</span>
-        <h2>Configure Your AI Tool</h2>
-      </div>
-      
-      <div class="tabs">
-        <button class="tab active" data-tab="cursor">Cursor</button>
-        <button class="tab" data-tab="claude">Claude Desktop</button>
-        <button class="tab" data-tab="other">Other</button>
-      </div>
-      
-      <!-- Cursor -->
-      <div class="tab-content active" id="cursor">
-        <div class="card">
-          <h3>Setting up Cursor</h3>
-          <ol>
-            <li>Open <strong>Cursor</strong></li>
-            <li>Press <code>Ctrl+Shift+J</code> (Windows) or <code>Cmd+Shift+J</code> (Mac) to open settings</li>
-            <li>Search for <strong>MCP</strong></li>
-            <li>Click <strong>"Edit in settings.json"</strong></li>
-            <li>Copy this config and <strong>change the path</strong> to where you extracted the folder:</li>
-          </ol>
-          
-          <div class="code-block">
-            <button class="copy-btn">Copy</button>
-            <pre>{
-  "mcpServers": {
-    "apex-agent": {
-      "command": "node",
-      "args": ["<span class="path-placeholder">C:/ApexAgent/mcp-server/index.js</span>"]
-    }
-  }
-}</pre>
-          </div>
-          
-          <div class="path-display">
-            <strong>⚠️ Change the path!</strong> Replace <code>C:/ApexAgent</code> with your actual folder path.
-          </div>
-          
-          <ol start="6">
-            <li><strong>Save</strong> the file</li>
-            <li><strong>Completely restart</strong> Cursor (close and reopen)</li>
-          </ol>
-        </div>
-      </div>
-      
-      <!-- Claude Desktop -->
-      <div class="tab-content" id="claude">
-        <div class="card">
-          <h3>Setting up Claude Desktop</h3>
-          <ol>
-            <li>Open the Claude config file:
-              <ul style="margin-top: 8px;">
-                <li><strong>Windows:</strong> Press <code>Win+R</code>, paste <code>%APPDATA%\Claude</code>, open <code>claude_desktop_config.json</code></li>
-                <li><strong>Mac:</strong> Open <code>~/Library/Application Support/Claude/claude_desktop_config.json</code></li>
-              </ul>
-            </li>
-            <li>Add this config (change the path to your folder):</li>
-          </ol>
-          
-          <div class="code-block">
-            <button class="copy-btn">Copy</button>
-            <pre>{
-  "mcpServers": {
-    "apex-agent": {
-      "command": "node",
-      "args": ["<span class="path-placeholder">C:/ApexAgent/mcp-server/index.js</span>"]
-    }
-  }
-}</pre>
-          </div>
-          
-          <div class="path-display">
-            <strong>⚠️ Change the path!</strong> Replace <code>C:/ApexAgent</code> with where you extracted the folder.
-          </div>
-          
-          <ol start="3">
-            <li><strong>Save</strong> and <strong>restart</strong> Claude Desktop</li>
-          </ol>
-        </div>
-      </div>
-      
-      <!-- Other -->
-      <div class="tab-content" id="other">
-        <div class="card">
-          <h3>Generic MCP Configuration</h3>
-          <p>For any MCP-compatible AI tool, add this server configuration:</p>
-          
-          <div class="code-block">
-            <button class="copy-btn">Copy</button>
-            <pre>{
-  "apex-agent": {
-    "command": "node",
-    "args": ["<span class="path-placeholder">/path/to/ApexAgent/mcp-server/index.js</span>"]
-  }
-}</pre>
-          </div>
-          
-          <p style="margin-top: 16px;">Refer to your AI tool's documentation for where to add MCP configurations.</p>
-        </div>
-      </div>
-    </section>
-    
-    <!-- Step 4 -->
-    <section class="section">
-      <div class="section-header">
-        <span class="step-number">4</span>
-        <h2>Connect the Extension</h2>
-      </div>
-      <div class="card">
+
+    <section class="step">
+      <p class="step-figure">1</p>
+      <div>
+        <h2>Install the extension</h2>
+        <p>From the Chrome Web Store, or load it yourself from a copy of the repository:</p>
         <ol>
-          <li>Click the <strong>Apex Agent</strong> icon in your browser toolbar</li>
-          <li>Go to the <strong>MCP</strong> tab</li>
-          <li>Click <strong>Connect</strong></li>
-          <li>Status should show <strong>Connected</strong> (green)</li>
+          <li>Open <code>chrome://extensions</code>.</li>
+          <li>Turn on <strong>Developer mode</strong>, top right.</li>
+          <li>Choose <strong>Load unpacked</strong> and select the <code>extension</code> folder.</li>
+          <li>Pin Apex Agent to the toolbar. The panel behind that icon is where you will see whether any of this is working.</li>
         </ol>
-        
-        <div class="note success">
-          <span class="note-icon">✓</span>
-          <div class="note-content">
-            <strong>You're all set!</strong> Try asking your AI: "Go to google.com and search for weather"
+      </div>
+    </section>
+
+    <section class="step">
+      <p class="step-figure">2</p>
+      <div>
+        <h2>Get the server running</h2>
+        <p>
+          A small program on your computer sits between your editor and this browser. Pick one of
+          two routes. Most people want the first.
+        </p>
+
+        <div class="route">
+          <span class="route-tag">Route A — nothing to install</span>
+          <h3>Use the published package</h3>
+          <p>
+            The config in step 3 runs <code>npx -y apex-agent-mcp</code> for you, and npx downloads
+            the package the first time it is needed. You do not have to run anything by hand. If you
+            want to watch it start, or check that Node can reach the registry, run it once yourself:
+          </p>
+          <pre><code>npx -y apex-agent-mcp</code></pre>
+          <p class="file-note">It stays in the foreground and waits for a browser. Press Ctrl+C to stop it; your editor will start its own copy.</p>
+        </div>
+
+        <div class="route">
+          <span class="route-tag">Route B — from a clone</span>
+          <h3>Run it from the repository</h3>
+          <p>Use this if you are changing the server yourself.</p>
+          <pre><code>git clone https://github.com/RTBRuhan/ApexAgent
+cd ApexAgent/mcp-server
+npm install</code></pre>
+          <div class="callout">
+            <strong>Do not skip <code>npm install</code>.</strong> The server imports packages that
+            are not in the repository, so running <code>node index.js</code> before installing them
+            fails with <code>ERR_MODULE_NOT_FOUND</code> and no other explanation. Earlier versions
+            of this guide left that step out, and this is the error it produced.
           </div>
+          <p>
+            On this route your editor config points at the file instead of the package: use
+            <code>node</code> as the command and the full path to
+            <code>mcp-server/index.js</code> as its only argument.
+          </p>
         </div>
       </div>
     </section>
-    
-    <!-- Features -->
-    <section class="section">
-      <div class="section-header">
-        <h2>What Can Apex Agent Do?</h2>
-      </div>
-      <div class="features">
-        <div class="feature">
-          <h4>🖱️ Browser Control</h4>
-          <p>Click, type, scroll, and navigate pages</p>
+
+    <section class="step">
+      <p class="step-figure">3</p>
+      <div>
+        <h2>Add it to your editor</h2>
+        <p>Choose your editor, put the snippet in the file named, and save.</p>
+
+        <fieldset class="segmented">
+          <legend class="sr-only">Choose your editor</legend>
+          <div class="segmented-row" id="editorOptions"></div>
+        </fieldset>
+
+        <p class="file-line">Put this in <code id="setupPath"></code></p>
+        <p class="file-note" id="setupNote"></p>
+        <pre id="setupSnippet" tabindex="0"></pre>
+        <div class="snippet-actions">
+          <button type="button" class="btn" id="copyBtn">Copy</button>
+          <p class="copy-status" id="copyStatus" aria-live="polite"></p>
         </div>
-        <div class="feature">
-          <h4>📸 Screenshots</h4>
-          <p>Capture pages for AI analysis</p>
-        </div>
-        <div class="feature">
-          <h4>🔍 Page Inspection</h4>
-          <p>Inspect elements and styles</p>
-        </div>
-        <div class="feature">
-          <h4>🛠️ DevTools</h4>
-          <p>Console, network, performance</p>
-        </div>
-        <div class="feature">
-          <h4>⏺️ Recording</h4>
-          <p>Record and export interactions</p>
-        </div>
-        <div class="feature">
-          <h4>🧩 Extensions</h4>
-          <p>Test and debug extensions</p>
+
+        <div class="callout">
+          <strong>Restart the editor completely</strong> after saving — quit it, do not just reload a
+          window. MCP servers are started when the editor loads its config, so a running editor will
+          not notice the new entry.
         </div>
       </div>
     </section>
-    
-    <!-- Troubleshooting -->
-    <section class="section">
-      <div class="section-header">
-        <h2>Troubleshooting</h2>
-      </div>
-      <div class="card">
-        <h3>Not connecting?</h3>
-        <ul>
-          <li><strong>Check Node.js</strong> — Run <code>node --version</code> in terminal</li>
-          <li><strong>Verify the path</strong> — Make sure the path in your config points to the <code>index.js</code> file</li>
-          <li><strong>Restart your AI tool</strong> — Close completely and reopen after saving config</li>
-          <li><strong>Check firewall</strong> — Allow Node.js through your firewall</li>
-        </ul>
-      </div>
-      <div class="card">
-        <h3>Still stuck?</h3>
-        <p>Check the documentation or ask for help on GitHub.</p>
-        <a href="https://github.com/RTBRuhan/ApexAgent/issues" target="_blank" class="btn btn-outline">
-          Get Help on GitHub
-        </a>
+
+    <section class="step">
+      <p class="step-figure">4</p>
+      <div>
+        <h2>Approve the pairing prompt</h2>
+        <p>
+          The first time this browser connects, the server does not trust it yet. It prints a
+          six-digit code to its own log — in your editor that is the MCP output panel — and Apex
+          Agent shows the same code in its panel.
+        </p>
+        <ol>
+          <li>Click the Apex Agent icon. It will say <strong>Waiting for approval</strong> and show six digits.</li>
+          <li>Compare them with the code in your editor's MCP log.</li>
+          <li>If they match, choose <strong>Approve</strong>. If they do not, or you were not expecting a prompt, choose <strong>Reject</strong>.</li>
+        </ol>
+        <div class="callout">
+          <strong>What you are granting.</strong> Approving lets a program on your computer see and
+          control this browser: your open tabs, pages you are signed in to, and what gets typed into
+          them. The code exists so that only something you can see the log of can get that access. It
+          expires after two minutes, and you only do this once per computer.
+        </div>
       </div>
     </section>
-    
+
+    <section class="step">
+      <p class="step-figure">5</p>
+      <div>
+        <h2>Check it works</h2>
+        <p>Ask your assistant, in its normal chat:</p>
+        <pre><code>List my open tabs.</code></pre>
+        <p>
+          You should get back the tabs actually open in this browser. If you get a generic answer
+          about not having browser access, the editor never loaded the config — go back to step 3.
+        </p>
+
+        <div class="check" id="checkBlock" data-state="checking">
+          <p class="check-word" id="checkWord">Checking</p>
+          <p class="check-say" id="checkSay">Asking the extension what it can see.</p>
+          <pre id="checkCommand" hidden></pre>
+          <button type="button" class="btn" id="checkBtn">Check again</button>
+        </div>
+
+        <p>
+          Then try something with a side effect, so you can watch it happen:
+          <em>open example.com and tell me the heading</em>. The panel's activity list records every
+          request, what it targeted, and whether it worked.
+        </p>
+
+        <div class="callout">
+          <strong>If clicks or typing do not register</strong> on a site — common with web apps built
+          on React — open the panel and turn on <strong>Trusted input and deep inspection</strong>.
+          Chrome will then show a yellow bar saying Apex Agent is debugging this browser. That bar is
+          Chrome telling you the truth about what is attached, and it disappears when the work
+          finishes.
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="section-head">When something is wrong</h2>
+      <p class="standfirst">
+        The panel always names one state. Find that state here.
+      </p>
+      <div class="trouble" id="troubleList"></div>
+
+      <div class="also">
+        <h3>It says Connected, but nothing happens</h3>
+        <p>
+          Either the master switch is off or the capability that request needs is off. Both cases
+          refuse the request and tell your editor so — check the panel's activity list, which will
+          show the request as <em>not allowed</em>.
+        </p>
+
+        <h3>ERR_MODULE_NOT_FOUND when the server starts</h3>
+        <p>
+          You are on route B and <code>npm install</code> has not been run in
+          <code>mcp-server</code>. Run it there, then restart your editor.
+        </p>
+
+        <h3>Two editors are open and only one seems to work</h3>
+        <p>
+          Both are attached; they just may be pointed at different tabs. The panel lists each editor
+          with the tab it will act on, and lets you point one at the tab you are looking at.
+        </p>
+
+        <h3>The chat panel that used to be here is gone</h3>
+        <p>
+          It was removed in version 2, along with any API key it had stored. Your editor does that
+          job better, and the panel had a flaw in how it displayed replies. Apex Agent now works only
+          through your editor.
+        </p>
+      </div>
+    </section>
+
     <footer>
-      <p>Made by <a href="https://rtbruhan.github.io" target="_blank">RTBRuhan</a></p>
-      <div class="links">
-        <a href="https://github.com/RTBRuhan/ApexAgent" target="_blank">GitHub</a>
-        <a href="https://github.com/RTBRuhan/ApexAgent/blob/main/PRIVACY.md" target="_blank">Privacy</a>
-      </div>
+      <a href="https://github.com/RTBRuhan/ApexAgent">Source and issues</a>
+      <a href="https://github.com/RTBRuhan/ApexAgent/blob/main/PRIVACY.md">What it collects</a>
     </footer>
+
   </div>
-  
-  <script src="getting-started.js"></script>
+  <script src="getting-started.js" type="module"></script>
 </body>
 </html>
